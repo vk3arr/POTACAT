@@ -2904,19 +2904,19 @@ document.addEventListener('keydown', (e) => {
     return;
   }
   // Ctrl+A — Prevent select-all
-  if (e.key === 'a' && (e.ctrlKey || e.metaKey) && !e.target.matches('input, select, textarea')) {
+  if (e.key.toLowerCase() === 'a' && (e.ctrlKey || e.metaKey) && !e.target.matches('input, select, textarea')) {
     e.preventDefault();
     return;
   }
   // Ctrl+M — Multi-park dialog (activator mode)
-  if (e.key === 'm' && (e.ctrlKey || e.metaKey) && appMode === 'activator') {
+  if (e.key.toLowerCase() === 'm' && (e.ctrlKey || e.metaKey) && appMode === 'activator') {
     e.preventDefault();
     const context = document.activeElement === document.getElementById('activator-hunter-park') ? 'hunter' : 'my';
     openMultiparkDialog(context);
     return;
   }
   // Alt+R — Reload last entry (activator mode)
-  if (e.key === 'r' && e.altKey && appMode === 'activator' && activationActive && activatorContacts.length > 0) {
+  if (e.key.toLowerCase() === 'r' && e.altKey && appMode === 'activator' && activationActive && activatorContacts.length > 0) {
     e.preventDefault();
     const last = activatorContacts[activatorContacts.length - 1];
     activatorCallsignInput.value = last.callsign;
@@ -2926,13 +2926,13 @@ document.addEventListener('keydown', (e) => {
     return;
   }
   // Ctrl+R / Cmd+R — Quick re-spot
-  if (e.key === 'r' && (e.ctrlKey || e.metaKey)) {
+  if (e.key.toLowerCase() === 'r' && (e.ctrlKey || e.metaKey)) {
     e.preventDefault();
     openQuickRespot();
     return;
   }
   // Ctrl+L / Cmd+L — Quick Log (unspotted QSO)
-  if (e.key === 'l' && (e.ctrlKey || e.metaKey)) {
+  if (e.key.toLowerCase() === 'l' && (e.ctrlKey || e.metaKey)) {
     e.preventDefault();
     openQuickLog();
     return;
