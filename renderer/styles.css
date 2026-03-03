@@ -3653,35 +3653,30 @@ dialog input, dialog select {
 }
 .activator-export-btn:hover { background: var(--bg-hover); }
 
-.activator-map-btn {
+.act-btn-group {
+  display: flex;
+  gap: 0;
+}
+.act-btn-group-item {
   background: var(--bg-tertiary);
   border: 1px solid var(--border-secondary);
+  border-radius: 0;
   color: var(--text-primary);
-  padding: 4px 12px;
-  border-radius: 4px;
+  padding: 4px 10px;
   cursor: pointer;
   font-size: 12px;
   white-space: nowrap;
 }
-.activator-map-btn:hover { background: var(--bg-hover); }
-
-.activator-spots-btn {
-  background: var(--bg-tertiary);
-  border: 1px solid var(--border-secondary);
-  color: var(--text-primary);
-  padding: 4px 12px;
-  border-radius: 4px;
-  cursor: pointer;
-  font-size: 12px;
-  white-space: nowrap;
-}
-.activator-spots-btn:hover { background: var(--bg-hover); }
-.activator-spots-btn.active {
+.act-btn-group-item:first-child { border-radius: 4px 0 0 4px; }
+.act-btn-group-item:last-child { border-radius: 0 4px 4px 0; }
+.act-btn-group-item:hover { background: var(--bg-hover); }
+.act-btn-group-item.active {
   background: var(--accent-green-btn);
   color: #111;
-  border-color: var(--accent-green-btn);
   font-weight: 700;
+  border-color: var(--accent-green-btn);
 }
+.act-btn-group-narrow { padding: 4px 6px; }
 
 /* Activator-spots splitter */
 .activator-spots-splitter {

@@ -199,10 +199,12 @@
       <button id="activator-continue-btn" class="activator-continue-btn hidden">Continue</button>
       <button id="activator-stop-btn" class="activator-stop-btn hidden">Stop Activation</button>
       <div id="activator-counter" class="activator-counter" title="Contacts logged (10 = valid activation)">0</div>
-      <button id="activator-map-btn" class="activator-map-btn" title="Open activation map">Map</button>
-      <button id="activator-spots-btn" class="activator-spots-btn" title="Show/hide hunter spots">Spots</button>
-      <button id="activator-spots-popout-btn" class="activator-spots-btn" title="Pop out spots window" style="padding:4px 6px;font-size:11px;">&#x2197;</button>
-      <button id="activator-rbn-btn" class="activator-spots-btn hidden" title="Show/hide Reverse Beacon Network">RBN</button>
+      <div class="act-btn-group">
+        <button id="activator-map-btn" class="act-btn-group-item" title="Open activation map">Map</button>
+        <button id="activator-spots-btn" class="act-btn-group-item" title="Show/hide hunter spots">Spots</button>
+        <button id="activator-spots-popout-btn" class="act-btn-group-item act-btn-group-narrow" title="Pop out spots window">&#x2197;</button>
+        <button id="activator-rbn-btn" class="act-btn-group-item hidden" title="Show/hide Reverse Beacon Network">RBN</button>
+      </div>
       <button id="activator-history-btn" class="activator-history-btn" title="Past Activations">Past</button>
       <span id="activator-timer" class="activator-timer" title="Activation duration">--:--</span>
       <span id="activator-utc" class="activator-utc"></span>
