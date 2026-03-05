@@ -138,7 +138,7 @@ function detectRigType() {
 
 function getRigCapabilities(rigType) {
   switch (rigType) {
-    case 'flex':    return { nb: true, atu: true, vfo: true, filter: true, filterType: 'arbitrary' };
+    case 'flex':    return { nb: true, atu: true, vfo: false, filter: true, filterType: 'arbitrary' };
     case 'yaesu':   return { nb: true, atu: false, vfo: true, filter: true, filterType: 'indexed' };
     case 'kenwood': return { nb: true, atu: false, vfo: true, filter: true, filterType: 'direct' };
     case 'rigctld': return { nb: true, atu: false, vfo: true, filter: true, filterType: 'passband' };
@@ -1345,6 +1345,8 @@ function connectSmartSdr() {
   smartSdr.setPersistentId(settings.smartSdrClientId);
   // Tell SmartSDR whether CW keyer needs GUI auth
   smartSdr.setNeedsCw(!!settings.enableCwKeyer);
+  // Bind to GUI client for ECHO CAT rig controls (ATU, etc.)
+  smartSdr.setNeedsBind(!!settings.enableRemote);
   // Log CW auth results
   smartSdr.on('cw-auth', ({ method, ok }) => {
     console.log(`[SmartSDR] CW auth: method=${method} ok=${ok}`);
@@ -1661,17 +1663,22 @@ function connectRemote() {
       const freqMhz = freqKhz / 1000;
       const band = freqToBand(freqMhz) || '';
 
+      const sig = data.sig || '';
+      const sigInfo = data.sigInfo || '';
+      const comment = sigInfo ? `[${sig} ${sigInfo}]` : '';
+
       const qsoData = {
         callsign: data.callsign.toUpperCase(),
         frequency: String(freqKhz),
         mode: (data.mode || '').toUpperCase(),
         band,
         qsoDate,
-        qsoTime,
+        timeOn: qsoTime,
         rstSent: data.rstSent || '59',
         rstRcvd: data.rstRcvd || '59',
-        sig: data.sig || '',
-        sigInfo: data.sigInfo || '',
+        sig,
+        sigInfo,
+        comment,
       };
 
       // Add station fields from settings
