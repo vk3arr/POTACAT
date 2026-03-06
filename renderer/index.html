@@ -535,6 +535,20 @@
         </label>
         <label class="checkbox-label"><input type="checkbox" id="set-qrz-full-name"> Show full name (first + last) instead of first name only</label>
         <span class="help-text" style="display:block;margin-top:4px;">Credentials are stored locally and only sent to xmldata.qrz.com</span>
+        <div id="qrz-logbook-section" class="hidden" style="margin-top:8px;border-top:1px solid #333;padding-top:8px;">
+          <div id="qrz-sub-status" class="help-text"></div>
+          <button type="button" id="qrz-recheck-btn" class="text-btn" style="margin-top:4px;">Recheck QRZ Subscription</button>
+          <label class="checkbox-label" style="margin-top:6px;">
+            <input type="checkbox" id="set-qrz-logbook" disabled> Upload each QSO to QRZ Logbook automatically
+          </label>
+          <div id="qrz-logbook-config" class="hidden" style="margin-left:12px;margin-top:4px;">
+            <label>QRZ Logbook API Key:
+              <input type="password" id="set-qrz-api-key" placeholder="From qrz.com Account Settings">
+            </label>
+            <span class="help-text" style="display:block;margin-top:4px;">Get your API key from qrz.com &rarr; My Account &rarr; QRZ Logbook Settings</span>
+            <div id="qrz-api-status" class="help-text" style="margin-top:4px;"></div>
+          </div>
+        </div>
       </div>
       <label>Distance Unit:
         <select id="set-dist-unit">
@@ -823,6 +837,7 @@
             <select id="set-logbook-type">
               <option value="">Select...</option>
               <option value="dxkeeper">DXLab DXKeeper</option>
+              <option value="hamrs">HamRS</option>
               <option value="hrd">Ham Radio Deluxe</option>
               <option value="log4om">Log4OM 2</option>
               <option value="n3fjp">N3FJP</option>
@@ -934,6 +949,7 @@
         </div>
         <span>Light Mode</span>
       </label>
+      <label class="checkbox-label"><input type="checkbox" id="set-colorblind"> Colorblind mode (deuteranopia)</label>
       <label class="checkbox-label"><input type="checkbox" id="set-color-rows" checked> Color table rows by spot source</label>
       <label class="checkbox-label"><input type="checkbox" id="set-enable-solar"> Solar Propagation</label>
       <span class="help-text" style="margin-left:12px;margin-bottom:6px;display:block;">Shows SFI, K, and A indices in the status bar</span>
@@ -1097,6 +1113,19 @@
         <input type="text" id="log-op-name" readonly tabindex="-1" style="color:#b0bec5;background:transparent;border-color:#333;">
       </label>
     </div>
+    <div id="log-type-picker" class="log-type-chips">
+      <button type="button" class="log-type-chip" data-type="dx">DX</button>
+      <button type="button" class="log-type-chip" data-type="pota">POTA</button>
+      <button type="button" class="log-type-chip" data-type="sota">SOTA</button>
+      <button type="button" class="log-type-chip" data-type="wwff">WWFF</button>
+      <button type="button" class="log-type-chip" data-type="llota">LLOTA</button>
+    </div>
+    <div id="log-ref-input-section" class="hidden" style="margin:2px 0 4px;">
+      <label style="display:block;">Reference:
+        <input type="text" id="log-ref-input" placeholder="e.g. US-1234" style="text-transform:uppercase;" spellcheck="false" autocomplete="off">
+      </label>
+      <div id="log-ref-name" style="font-size:12px;color:var(--accent-green);margin-top:2px;min-height:16px;"></div>
+    </div>
     <div style="display:flex;gap:8px;">
       <label style="flex:1;">Frequency (kHz):
         <input type="text" id="log-frequency">
@@ -1152,7 +1181,6 @@
         </div>
       </label>
     </div>
-    <div id="log-ref-display" class="hidden" style="margin:8px 0;font-size:13px;color:#4ecca3;"></div>
     <div id="log-addl-parks-section" class="hidden" style="margin:6px 0;">
       <label class="checkbox-label" style="display:flex;align-items:center;gap:6px;cursor:pointer;">
         <input type="checkbox" id="log-addl-parks-cb"> Additional Parks

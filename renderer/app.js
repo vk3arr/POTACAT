@@ -326,6 +326,7 @@ const utcClockEl = document.getElementById('utc-clock');
 const sfiStatusEl = document.getElementById('sfi-status');
 const kStatusEl = document.getElementById('k-status');
 const aStatusEl = document.getElementById('a-status');
+const setColorblind = document.getElementById('set-colorblind');
 const setColorRows = document.getElementById('set-color-rows');
 const setEnableSolar = document.getElementById('set-enable-solar');
 const setEnableBandActivity = document.getElementById('set-enable-band-activity');
@@ -355,6 +356,13 @@ const qrzConfig = document.getElementById('qrz-config');
 const setQrzUsername = document.getElementById('set-qrz-username');
 const setQrzPassword = document.getElementById('set-qrz-password');
 const setQrzFullName = document.getElementById('set-qrz-full-name');
+const qrzLogbookSection = document.getElementById('qrz-logbook-section');
+const qrzSubStatus = document.getElementById('qrz-sub-status');
+const qrzRecheckBtn = document.getElementById('qrz-recheck-btn');
+const setQrzLogbook = document.getElementById('set-qrz-logbook');
+const qrzLogbookConfig = document.getElementById('qrz-logbook-config');
+const setQrzApiKey = document.getElementById('set-qrz-api-key');
+const qrzApiStatus = document.getElementById('qrz-api-status');
 const setSmartSdrSpots = document.getElementById('set-smartsdr-spots');
 const smartSdrConfig = document.getElementById('smartsdr-config');
 const setSmartSdrHost = document.getElementById('set-smartsdr-host');
@@ -455,7 +463,11 @@ function applyRstMode() {
   document.querySelectorAll('.rst-split-mode').forEach(el => el.classList.toggle('hidden', !n1mmRst));
   document.querySelectorAll('.rst-n1mm-mode').forEach(el => el.classList.toggle('hidden', n1mmRst));
 }
-const logRefDisplay = document.getElementById('log-ref-display');
+const logTypePicker = document.getElementById('log-type-picker');
+const logRefInputSection = document.getElementById('log-ref-input-section');
+const logRefInput = document.getElementById('log-ref-input');
+const logRefName = document.getElementById('log-ref-name');
+let logSelectedType = '';
 const logComment = document.getElementById('log-comment');
 const logSaveBtn = document.getElementById('log-save');
 const logCancelBtn = document.getElementById('log-cancel');
@@ -616,6 +628,7 @@ async function loadPrefs() {
     updateTitleBar();
   }
   applyTheme(settings.lightMode === true);
+  applyColorblindMode(settings.colorblindMode === true);
   grid = settings.grid || '';
   distUnit = settings.distUnit || 'mi';
   scanDwell = parseInt(settings.scanDwell, 10) || 7;
@@ -1401,7 +1414,81 @@ radioTypeBtns.forEach((btn) => {
 // QRZ checkbox toggles QRZ config visibility
 setEnableQrz.addEventListener('change', () => {
   qrzConfig.classList.toggle('hidden', !setEnableQrz.checked);
+  updateQrzLogbookVisibility();
 });
+
+// QRZ Logbook section visibility — show when QRZ enabled AND credentials entered
+function updateQrzLogbookVisibility() {
+  const show = setEnableQrz.checked && setQrzUsername.value.trim() && setQrzPassword.value;
+  qrzLogbookSection.classList.toggle('hidden', !show);
+  if (!show) {
+    setQrzLogbook.checked = false;
+    setQrzLogbook.disabled = true;
+    qrzLogbookConfig.classList.add('hidden');
+  }
+}
+
+// Recheck subscription button
+qrzRecheckBtn.addEventListener('click', async () => {
+  qrzSubStatus.textContent = 'Checking...';
+  qrzSubStatus.style.color = '';
+  qrzRecheckBtn.disabled = true;
+  try {
+    const result = await window.api.qrzCheckSub();
+    if (result.error) {
+      qrzSubStatus.textContent = result.error;
+      qrzSubStatus.style.color = '#e94560';
+      setQrzLogbook.disabled = true;
+    } else if (result.subscriber) {
+      qrzSubStatus.textContent = `XML Subscriber \u2014 expires ${result.expiry}`;
+      qrzSubStatus.style.color = '#4ecca3';
+      setQrzLogbook.disabled = false;
+    } else {
+      const msg = result.expiry && result.expiry !== 'non-subscriber'
+        ? `QRZ XML subscription expired (${result.expiry})`
+        : 'No active QRZ XML subscription';
+      qrzSubStatus.textContent = msg;
+      qrzSubStatus.style.color = '#e94560';
+      setQrzLogbook.disabled = true;
+      setQrzLogbook.checked = false;
+      qrzLogbookConfig.classList.add('hidden');
+    }
+  } catch {
+    qrzSubStatus.textContent = 'Check failed';
+    qrzSubStatus.style.color = '#e94560';
+  }
+  qrzRecheckBtn.disabled = false;
+});
+
+// Toggle QRZ Logbook config visibility
+setQrzLogbook.addEventListener('change', () => {
+  qrzLogbookConfig.classList.toggle('hidden', !setQrzLogbook.checked);
+});
+
+// Verify API key on blur
+setQrzApiKey.addEventListener('blur', async () => {
+  const key = setQrzApiKey.value.trim();
+  if (!key) { qrzApiStatus.textContent = ''; return; }
+  qrzApiStatus.textContent = 'Verifying...';
+  qrzApiStatus.style.color = '';
+  try {
+    const result = await window.api.qrzVerifyApiKey(key);
+    if (result.ok) {
+      qrzApiStatus.textContent = 'API key valid';
+      qrzApiStatus.style.color = '#4ecca3';
+    } else {
+      qrzApiStatus.textContent = result.reason || result.message || 'Invalid key';
+      qrzApiStatus.style.color = '#e94560';
+    }
+  } catch {
+    qrzApiStatus.textContent = 'Verification failed';
+    qrzApiStatus.style.color = '#e94560';
+  }
+});
+
+// Update logbook section when credentials change
+setQrzUsername.addEventListener('input', updateQrzLogbookVisibility);
+setQrzPassword.addEventListener('input', updateQrzLogbookVisibility);
 
 setEnableCluster.addEventListener('change', () => {
   clusterConfig.classList.toggle('hidden', !setEnableCluster.checked);
@@ -1806,6 +1893,7 @@ const LOGBOOK_DEFAULTS = {
     help: 'In Log4OM 2: Settings > Program Configuration > Software Integration > UDP Inbound tab. Click the green "+" button to add a new entry. Set Type to "ADIF-MESSAGE" and Port to "2237". Click "Save and apply". Leave Host at 127.0.0.1 in POTACAT. Log4OM must be running to receive QSOs. Only live-logged QSOs are forwarded — importing logs into POTACAT will not create duplicates.',
   },
   dxkeeper: { port: 52001, help: 'In DXKeeper: Configuration > Defaults tab > Network Service panel. The default base port is 52000 (DXKeeper listens on base + 1 = 52001). DXKeeper must be running to receive QSOs. QSOs will be logged with missing fields auto-deduced from callbook/entity databases.' },
+  hamrs: { port: 2333, help: 'In HamRS: enable WSJT-X integration in Settings. HamRS listens on UDP port 2333 for ADIF data. Leave Host at 127.0.0.1 if HamRS is running on the same computer. HamRS must be running to receive QSOs.' },
   n3fjp: { port: 1100, help: 'In N3FJP: Settings > Application Program Interface > check "TCP API Enabled". Set the port to 1100 (default). N3FJP must be running to receive QSOs.' },
   hrd: { port: 2333, help: 'In HRD Logbook: Tools > Configure > QSO Forwarding. Under UDP Receive, check "Receive QSO notifications using UDP9/ADIF from other logging programs (eg. WSJT-X)". Set the receive port to 2333 and select your target database. POTACAT and WSJT-X can both send to this port simultaneously.' },
 };
@@ -1853,7 +1941,7 @@ adifImportBtn.addEventListener('click', async () => {
       adifImportResult.textContent = '';
     } else if (result.success) {
       adifImportResult.textContent = `${result.imported} QSOs imported`;
-      adifImportResult.style.color = '#4ecca3';
+      adifImportResult.style.color = SOURCE_COLORS_ACTIVE.pota;
     } else {
       adifImportResult.textContent = 'Import failed';
       adifImportResult.style.color = '#e94560';
@@ -2436,89 +2524,86 @@ L.Icon.Default.mergeOptions({
   shadowUrl: '../node_modules/leaflet/dist/images/marker-shadow.png',
 });
 
-// Orange teardrop pin for SOTA spots (same shape as default Leaflet marker)
-const sotaIcon = L.divIcon({
-  className: '',
-  html: '<svg width="25" height="41" viewBox="0 0 25 41" xmlns="http://www.w3.org/2000/svg">' +
-    '<path d="M12.5 0C5.6 0 0 5.6 0 12.5C0 21.9 12.5 41 12.5 41S25 21.9 25 12.5C25 5.6 19.4 0 12.5 0Z" fill="#f0a500" stroke="#c47f00" stroke-width="1"/>' +
-    '<circle cx="12.5" cy="12.5" r="5.5" fill="#fff" opacity="0.4"/>' +
-    '</svg>',
-  iconSize: [25, 41],
-  iconAnchor: [12, 41],
-  popupAnchor: [1, -34],
-});
+// --- Colorblind-safe dual palettes ---
+const SOURCE_COLORS_NORMAL = {
+  pota: '#4ecca3', sota: '#f0a500', wwff: '#26a69a',
+  llota: '#42a5f5', dxc: '#e040fb', rbn: '#00bcd4', pskr: '#ff6b6b'
+};
+const SOURCE_COLORS_CB = {
+  pota: '#4fc3f7', sota: '#ffb300', wwff: '#29b6f6',
+  llota: '#42a5f5', dxc: '#e040fb', rbn: '#81d4fa', pskr: '#ffa726'
+};
+const SOURCE_STROKES_NORMAL = {
+  pota: '#3ba882', sota: '#c47f00', wwff: '#1b7a71',
+  llota: '#1e88e5', dxc: '#ab00d9', rbn: '#0097a7', pskr: '#d84343'
+};
+const SOURCE_STROKES_CB = {
+  pota: '#2196f3', sota: '#e6a200', wwff: '#0288d1',
+  llota: '#1e88e5', dxc: '#ab00d9', rbn: '#4fc3f7', pskr: '#e68a00'
+};
+const RBN_BAND_COLORS_NORMAL = {
+  '160m': '#ff4444', '80m': '#ff8c00', '60m': '#ffd700', '40m': '#4ecca3',
+  '30m': '#00cccc', '20m': '#4488ff', '17m': '#8844ff', '15m': '#cc44ff',
+  '12m': '#ff44cc', '10m': '#ff4488', '6m': '#e0e0e0',
+};
+const RBN_BAND_COLORS_CB = {
+  '160m': '#ffa726', '80m': '#ffca28', '60m': '#fff176', '40m': '#4fc3f7',
+  '30m': '#00cccc', '20m': '#4488ff', '17m': '#8844ff', '15m': '#cc44ff',
+  '12m': '#ff44cc', '10m': '#ff4488', '6m': '#e0e0e0',
+};
 
-// Cyan teardrop pin for RBN watchlist spots
-const rbnIcon = L.divIcon({
-  className: '',
-  html: '<svg width="25" height="41" viewBox="0 0 25 41" xmlns="http://www.w3.org/2000/svg">' +
-    '<path d="M12.5 0C5.6 0 0 5.6 0 12.5C0 21.9 12.5 41 12.5 41S25 21.9 25 12.5C25 5.6 19.4 0 12.5 0Z" fill="#00bcd4" stroke="#0097a7" stroke-width="1"/>' +
-    '<circle cx="12.5" cy="12.5" r="5.5" fill="#fff" opacity="0.4"/>' +
-    '</svg>',
-  iconSize: [25, 41],
-  iconAnchor: [12, 41],
-  popupAnchor: [1, -34],
-});
+let SOURCE_COLORS_ACTIVE = { ...SOURCE_COLORS_NORMAL };
+let SOURCE_STROKES_ACTIVE = { ...SOURCE_STROKES_NORMAL };
+let RBN_BAND_COLORS_ACTIVE = { ...RBN_BAND_COLORS_NORMAL };
 
-// Teal teardrop pin for WWFF spots
-const wwffIcon = L.divIcon({
-  className: '',
-  html: '<svg width="25" height="41" viewBox="0 0 25 41" xmlns="http://www.w3.org/2000/svg">' +
-    '<path d="M12.5 0C5.6 0 0 5.6 0 12.5C0 21.9 12.5 41 12.5 41S25 21.9 25 12.5C25 5.6 19.4 0 12.5 0Z" fill="#26a69a" stroke="#1b7a71" stroke-width="1"/>' +
-    '<circle cx="12.5" cy="12.5" r="5.5" fill="#fff" opacity="0.4"/>' +
-    '</svg>',
-  iconSize: [25, 41],
-  iconAnchor: [12, 41],
-  popupAnchor: [1, -34],
-});
+// --- Teardrop icon factory ---
+function makeTeardropIcon(fill, stroke) {
+  return L.divIcon({
+    className: '',
+    html: `<svg width="25" height="41" viewBox="0 0 25 41" xmlns="http://www.w3.org/2000/svg"><path d="M12.5 0C5.6 0 0 5.6 0 12.5C0 21.9 12.5 41 12.5 41S25 21.9 25 12.5C25 5.6 19.4 0 12.5 0Z" fill="${fill}" stroke="${stroke}" stroke-width="1"/><circle cx="12.5" cy="12.5" r="5.5" fill="#fff" opacity="0.4"/></svg>`,
+    iconSize: [25, 41],
+    iconAnchor: [12, 41],
+    popupAnchor: [1, -34],
+  });
+}
 
-// Blue teardrop pin for LLOTA spots
-const llotaIcon = L.divIcon({
-  className: '',
-  html: '<svg width="25" height="41" viewBox="0 0 25 41" xmlns="http://www.w3.org/2000/svg">' +
-    '<path d="M12.5 0C5.6 0 0 5.6 0 12.5C0 21.9 12.5 41 12.5 41S25 21.9 25 12.5C25 5.6 19.4 0 12.5 0Z" fill="#42a5f5" stroke="#1e88e5" stroke-width="1"/>' +
-    '<circle cx="12.5" cy="12.5" r="5.5" fill="#fff" opacity="0.4"/>' +
-    '</svg>',
-  iconSize: [25, 41],
-  iconAnchor: [12, 41],
-  popupAnchor: [1, -34],
-});
+let sourceIcons = {};
+function rebuildSourceIcons() {
+  for (const src of Object.keys(SOURCE_COLORS_ACTIVE)) {
+    sourceIcons[src] = makeTeardropIcon(SOURCE_COLORS_ACTIVE[src], SOURCE_STROKES_ACTIVE[src]);
+  }
+}
+rebuildSourceIcons(); // initial build with normal palette
 
-// Green teardrop pin for POTA spots
-const potaIcon = L.divIcon({
-  className: '',
-  html: '<svg width="25" height="41" viewBox="0 0 25 41" xmlns="http://www.w3.org/2000/svg">' +
-    '<path d="M12.5 0C5.6 0 0 5.6 0 12.5C0 21.9 12.5 41 12.5 41S25 21.9 25 12.5C25 5.6 19.4 0 12.5 0Z" fill="#4ecca3" stroke="#3ba882" stroke-width="1"/>' +
-    '<circle cx="12.5" cy="12.5" r="5.5" fill="#fff" opacity="0.4"/>' +
-    '</svg>',
-  iconSize: [25, 41],
-  iconAnchor: [12, 41],
-  popupAnchor: [1, -34],
-});
-
-// Purple teardrop pin for DX Cluster spots
-const dxcIcon = L.divIcon({
-  className: '',
-  html: '<svg width="25" height="41" viewBox="0 0 25 41" xmlns="http://www.w3.org/2000/svg">' +
-    '<path d="M12.5 0C5.6 0 0 5.6 0 12.5C0 21.9 12.5 41 12.5 41S25 21.9 25 12.5C25 5.6 19.4 0 12.5 0Z" fill="#e040fb" stroke="#ab00d9" stroke-width="1"/>' +
-    '<circle cx="12.5" cy="12.5" r="5.5" fill="#fff" opacity="0.4"/>' +
-    '</svg>',
-  iconSize: [25, 41],
-  iconAnchor: [12, 41],
-  popupAnchor: [1, -34],
-});
-
-// Coral teardrop pin for PSKReporter/FreeDV spots
-const pskrIcon = L.divIcon({
-  className: '',
-  html: '<svg width="25" height="41" viewBox="0 0 25 41" xmlns="http://www.w3.org/2000/svg">' +
-    '<path d="M12.5 0C5.6 0 0 5.6 0 12.5C0 21.9 12.5 41 12.5 41S25 21.9 25 12.5C25 5.6 19.4 0 12.5 0Z" fill="#ff6b6b" stroke="#d84343" stroke-width="1"/>' +
-    '<circle cx="12.5" cy="12.5" r="5.5" fill="#fff" opacity="0.4"/>' +
-    '</svg>',
-  iconSize: [25, 41],
-  iconAnchor: [12, 41],
-  popupAnchor: [1, -34],
-});
+function applyColorblindMode(enabled) {
+  if (enabled) {
+    Object.assign(SOURCE_COLORS_ACTIVE, SOURCE_COLORS_CB);
+    Object.assign(SOURCE_STROKES_ACTIVE, SOURCE_STROKES_CB);
+    Object.assign(RBN_BAND_COLORS_ACTIVE, RBN_BAND_COLORS_CB);
+  } else {
+    Object.assign(SOURCE_COLORS_ACTIVE, SOURCE_COLORS_NORMAL);
+    Object.assign(SOURCE_STROKES_ACTIVE, SOURCE_STROKES_NORMAL);
+    Object.assign(RBN_BAND_COLORS_ACTIVE, RBN_BAND_COLORS_NORMAL);
+  }
+  rebuildSourceIcons();
+  // Update CSS variables
+  const root = document.documentElement;
+  root.style.setProperty('--accent-green', enabled ? '#4fc3f7' : '');
+  root.style.setProperty('--accent-green-btn', enabled ? '#4fc3f7' : '');
+  for (const [src, color] of Object.entries(SOURCE_COLORS_ACTIVE)) {
+    root.style.setProperty('--source-' + src, color);
+  }
+  // Update inline source label colors in Spots dropdown
+  const srcLabels = { pota: '#spots-pota', sota: '#spots-sota', wwff: '#spots-wwff',
+    llota: '#spots-llota', dxc: '#spots-cluster', rbn: '#spots-rbn', pskr: '#spots-pskr' };
+  for (const [src, sel] of Object.entries(srcLabels)) {
+    const span = document.querySelector(sel + ' + span') || document.querySelector(sel)?.parentElement?.querySelector('span');
+    if (span) span.style.color = SOURCE_COLORS_ACTIVE[src];
+  }
+  // Refresh map markers if map is visible
+  if (typeof renderMarkers === 'function') try { renderMarkers(); } catch {}
+  if (typeof renderRbnMarkers === 'function') try { renderRbnMarkers(); } catch {}
+}
 
 // Bright red teardrop pin with gold star for DX expeditions
 const expeditionIcon = L.divIcon({
@@ -2561,19 +2646,7 @@ let rbnHomeMarker = null;
 let rbnNightLayer = null;
 let rbnHomePos = null; // { lat, lon } for arc drawing
 
-const RBN_BAND_COLORS = {
-  '160m': '#ff4444',
-  '80m':  '#ff8c00',
-  '60m':  '#ffd700',
-  '40m':  '#4ecca3',
-  '30m':  '#00cccc',
-  '20m':  '#4488ff',
-  '17m':  '#8844ff',
-  '15m':  '#cc44ff',
-  '12m':  '#ff44cc',
-  '10m':  '#ff4488',
-  '6m':   '#e0e0e0',
-};
+// RBN_BAND_COLORS is now managed by RBN_BAND_COLORS_ACTIVE (see colorblind palettes above)
 
 // Compute intermediate points along a great circle arc (geodesic)
 function greatCircleArc(lat1, lon1, lat2, lon2, numPoints) {
@@ -2750,13 +2823,7 @@ function clearTuneArc() {
 }
 
 function tuneArcColor(source) {
-  if (source === 'sota') return '#f0a500';
-  if (source === 'dxc') return '#e040fb';
-  if (source === 'rbn') return '#00bcd4';
-  if (source === 'wwff') return '#26a69a';
-  if (source === 'llota') return '#42a5f5';
-  if (source === 'pskr') return '#ff6b6b';
-  return '#4ecca3'; // pota / default
+  return SOURCE_COLORS_ACTIVE[source] || SOURCE_COLORS_ACTIVE.pota;
 }
 
 function showTuneArc(lat, lon, freq, source) {
@@ -2947,17 +3014,17 @@ function updateMapMarkers(filtered) {
     const watched = watchlist.has(s.callsign.toUpperCase());
 
     const sourceLabel = (s.source || 'pota').toUpperCase();
-    const sourceColor = s.source === 'sota' ? '#f0a500' : s.source === 'dxc' ? '#e040fb' : s.source === 'rbn' ? '#00bcd4' : s.source === 'wwff' ? '#26a69a' : s.source === 'llota' ? '#42a5f5' : s.source === 'pskr' ? '#ff6b6b' : '#4ecca3';
+    const sourceColor = SOURCE_COLORS_ACTIVE[s.source] || SOURCE_COLORS_ACTIVE.pota;
     const logBtnHtml = enableLogging
       ? ` <button class="log-popup-btn" data-call="${s.callsign}" data-freq="${s.frequency}" data-mode="${s.mode}" data-ref="${s.reference || ''}" data-name="${(s.parkName || '').replace(/"/g, '&quot;')}" data-source="${s.source || ''}" data-wwff-ref="${s.wwffReference || ''}" data-wwff-name="${(s.wwffParkName || '').replace(/"/g, '&quot;')}">Log</button>`
       : '';
     const mapNewPark = workedParksSet.size > 0 && (s.source === 'pota' || s.source === 'wwff') && s.reference && !workedParksSet.has(s.reference);
-    const newBadge = mapNewPark ? ' <span style="background:#4ecca3;color:#000;font-size:10px;font-weight:bold;padding:1px 4px;border-radius:3px;">NEW</span>' : '';
+    const newBadge = mapNewPark ? ` <span style="background:${SOURCE_COLORS_ACTIVE.pota};color:#000;font-size:10px;font-weight:bold;padding:1px 4px;border-radius:3px;">NEW</span>` : '';
     const expeditionBadge = expeditionCallsigns.has(s.callsign.toUpperCase()) ? ' <span style="background:#ff1744;color:#fff;font-size:10px;font-weight:bold;padding:1px 4px;border-radius:3px;">DXP</span>' : '';
     const mapEvent = getEventForCallsign(s.callsign);
     const eventBadgeHtml = mapEvent ? ` <span style="background:${mapEvent.badgeColor || '#ff6b00'};color:#fff;font-size:10px;font-weight:bold;padding:1px 4px;border-radius:3px;">${mapEvent.badge || 'EVT'}</span>` : '';
-    const wwffBadge = s.wwffReference ? ` <span style="background:#26a69a;color:#000;font-size:10px;font-weight:bold;padding:1px 4px;border-radius:3px;">WWFF</span>` : '';
-    const wwffRefLine = s.wwffReference ? `<br><b>${s.wwffReference}</b> ${s.wwffParkName || ''} <span style="color:#26a69a;font-size:11px;">[WWFF]</span>` : '';
+    const wwffBadge = s.wwffReference ? ` <span style="background:${SOURCE_COLORS_ACTIVE.wwff};color:#000;font-size:10px;font-weight:bold;padding:1px 4px;border-radius:3px;">WWFF</span>` : '';
+    const wwffRefLine = s.wwffReference ? `<br><b>${s.wwffReference}</b> ${s.wwffParkName || ''} <span style="color:${SOURCE_COLORS_ACTIVE.wwff};font-size:11px;">[WWFF]</span>` : '';
     const qrzOp = qrzData.get(s.callsign.toUpperCase().split('/')[0]);
     const opName = qrzDisplayName(qrzOp);
     const opLine = opName ? `<span style="color:#b0bec5;font-size:11px;">${opName}</span><br>` : '';
@@ -2973,13 +3040,7 @@ function updateMapMarkers(filtered) {
     const oop = isOutOfPrivilege(parseFloat(s.frequency), s.mode, licenseClass);
     const worked = workedQsos.has(s.callsign.toUpperCase());
     const isExpedition = expeditionCallsigns.has(s.callsign.toUpperCase());
-    const sourceIcon = s.source === 'sota' ? sotaIcon
-      : s.source === 'rbn' ? rbnIcon
-      : s.source === 'wwff' ? wwffIcon
-      : s.source === 'llota' ? llotaIcon
-      : s.source === 'dxc' ? dxcIcon
-      : s.source === 'pskr' ? pskrIcon
-      : potaIcon;
+    const sourceIcon = sourceIcons[s.source] || sourceIcons.pota;
     const markerOptions = isExpedition
       ? { icon: expeditionIcon, zIndexOffset: 500 }
       : oop
@@ -3246,10 +3307,7 @@ document.addEventListener('keydown', (e) => {
 });
 
 // --- Quick Re-spot (Ctrl+R) ---
-const SOURCE_COLORS = {
-  pota: '#4ecca3', sota: '#f0a500', wwff: '#26a69a',
-  llota: '#42a5f5', dxc: '#e040fb', rbn: '#00bcd4', pskr: '#ff6b6b'
-};
+// SOURCE_COLORS is now managed by SOURCE_COLORS_ACTIVE (see colorblind palettes above)
 const RESPOT_NAMES = { pota: 'POTA', wwff: 'WWFF', llota: 'LLOTA', dxc: 'DX Cluster' };
 
 function getRespotTargets(s) {
@@ -3305,8 +3363,8 @@ async function openQuickRespot() {
   const bar = document.getElementById('respot-network-bar');
   const labels = targets.map(t => RESPOT_NAMES[t]);
   bar.textContent = (targets.includes('dxc') ? 'Spotting to ' : 'Re-spotting to ') + labels.join(' & ');
-  bar.style.borderColor = SOURCE_COLORS[targets[0]];
-  bar.style.color = SOURCE_COLORS[targets[0]];
+  bar.style.borderColor = SOURCE_COLORS_ACTIVE[targets[0]];
+  bar.style.color = SOURCE_COLORS_ACTIVE[targets[0]];
   dlg.dataset.targets = JSON.stringify(targets);
 
   // Comment template — pick based on network type
@@ -3465,6 +3523,109 @@ document.getElementById('dx-command-send').addEventListener('click', sendDxComma
   });
 });
 
+// --- Log Type Picker ---
+const LOG_TYPE_SOURCE_MAP = { pota: 'pota', sota: 'sota', wwff: 'wwff', llota: 'llota', dx: 'dxc' };
+const LOG_TYPE_PLACEHOLDERS = { pota: 'e.g. US-1234', sota: 'e.g. W6/CT-001', wwff: 'e.g. KFF-1234', llota: 'e.g. US-0001' };
+
+function selectLogType(type) {
+  logSelectedType = type;
+  logTypePicker.querySelectorAll('.log-type-chip').forEach(chip => {
+    const ct = chip.dataset.type;
+    const isActive = ct === type;
+    chip.classList.toggle('active', isActive);
+    if (isActive) {
+      const color = ct === 'dx' ? SOURCE_COLORS_ACTIVE.dxc : SOURCE_COLORS_ACTIVE[ct] || '#888';
+      chip.style.borderColor = color;
+      chip.style.color = color;
+    } else {
+      chip.style.borderColor = '';
+      chip.style.color = '';
+    }
+  });
+  // Show/hide reference input (not for DX or no selection)
+  const showRef = type && type !== 'dx';
+  logRefInputSection.classList.toggle('hidden', !showRef);
+  if (showRef) {
+    logRefInput.placeholder = LOG_TYPE_PLACEHOLDERS[type] || '';
+  }
+  if (!showRef) {
+    logRefInput.value = '';
+    logRefName.textContent = '';
+  }
+  // Show/hide additional parks (POTA/WWFF/LLOTA only)
+  const isParkType = ['pota', 'wwff', 'llota'].includes(type);
+  logAddlParksSection.classList.toggle('hidden', !isParkType);
+  updateLogRespot();
+}
+
+function updateLogRespot() {
+  const respotSection = document.getElementById('log-respot-section');
+  const respotCheckbox = document.getElementById('log-respot');
+  const respotLabel = document.getElementById('log-respot-label');
+  const respotComment = document.getElementById('log-respot-comment');
+  const respotCommentLabel = document.getElementById('log-respot-comment-label');
+  const ref = logRefInput.value.trim().toUpperCase();
+  const targets = [];
+  if (!myCallsign) { /* no respot without callsign */ }
+  else if (logSelectedType === 'pota' && ref) {
+    targets.push('pota');
+    // Check for dual-park WWFF
+    if (currentLogSpot && currentLogSpot.wwffReference) targets.push('wwff');
+  } else if (logSelectedType === 'wwff' && ref) {
+    targets.push('wwff');
+  } else if (logSelectedType === 'llota' && ref) {
+    targets.push('llota');
+  } else if (logSelectedType === 'dx' && clusterConnected) {
+    targets.push('dxc');
+  }
+
+  if (targets.length) {
+    respotSection.classList.remove('hidden');
+    respotSection.dataset.targets = JSON.stringify(targets);
+    const labelNames = targets.map(t => RESPOT_NAMES[t]).join(' & ');
+    const verb = targets.includes('dxc') ? 'Spot on ' : 'Re-spot on ';
+    const inputEl = respotLabel.querySelector('input');
+    let labelTextNode = inputEl.nextSibling;
+    if (!labelTextNode || labelTextNode.nodeType !== 3) {
+      labelTextNode = document.createTextNode('');
+      respotLabel.appendChild(labelTextNode);
+    }
+    labelTextNode.textContent = ' ' + verb + labelNames;
+    respotLabel.style.color = SOURCE_COLORS_ACTIVE[targets[0]];
+    respotCheckbox.checked = respotDefault;
+    respotComment.value = targets.includes('dxc') ? dxRespotTemplate : respotTemplate;
+    respotCommentLabel.style.display = respotCheckbox.checked ? '' : 'none';
+    respotCheckbox.onchange = () => { respotCommentLabel.style.display = respotCheckbox.checked ? '' : 'none'; };
+  } else {
+    respotSection.classList.add('hidden');
+    respotSection.dataset.targets = '[]';
+    respotCheckbox.checked = false;
+  }
+}
+
+// Type chip click handlers
+logTypePicker.addEventListener('click', (e) => {
+  const chip = e.target.closest('.log-type-chip');
+  if (!chip) return;
+  const type = chip.dataset.type;
+  selectLogType(logSelectedType === type ? '' : type);
+});
+
+// Debounced reference lookup
+let logRefLookupTimer = null;
+logRefInput.addEventListener('input', () => {
+  clearTimeout(logRefLookupTimer);
+  const val = logRefInput.value.trim().toUpperCase();
+  if (val.length < 3) { logRefName.textContent = ''; updateLogRespot(); return; }
+  logRefLookupTimer = setTimeout(async () => {
+    try {
+      const park = await window.api.getPark(val);
+      logRefName.textContent = park && park.name ? park.name : '';
+    } catch { logRefName.textContent = ''; }
+    updateLogRespot();
+  }, 400);
+});
+
 // --- Quick Log (Ctrl+L) ---
 let quickLogLookupTimer = null;
 
@@ -3489,7 +3650,7 @@ function openQuickLog() {
   logCallsign.value = '';
   logCallsign.readOnly = false;
   logOpName.value = '';
-  logRefDisplay.classList.add('hidden');
+  selectLogType('');
   logCallsign.focus();
 }
 
@@ -4162,13 +4323,13 @@ function render() {
         if (cell.newPark) {
           const nb = document.createElement('span');
           nb.textContent = 'NEW';
-          nb.style.cssText = 'background:#4ecca3;color:#000;font-size:9px;font-weight:bold;padding:1px 3px;border-radius:3px;margin-left:4px;';
+          nb.style.cssText = `background:${SOURCE_COLORS_ACTIVE.pota};color:#000;font-size:9px;font-weight:bold;padding:1px 3px;border-radius:3px;margin-left:4px;`;
           td.appendChild(nb);
         }
         if (cell.wwff) {
           const badge = document.createElement('span');
           badge.textContent = 'WWFF';
-          badge.style.cssText = 'background:#26a69a;color:#000;font-size:9px;font-weight:bold;padding:1px 3px;border-radius:3px;margin-left:4px;';
+          badge.style.cssText = `background:${SOURCE_COLORS_ACTIVE.wwff};color:#000;font-size:9px;font-weight:bold;padding:1px 3px;border-radius:3px;margin-left:4px;`;
           td.appendChild(badge);
         }
         cellMap.set(cell.col, td);
@@ -4370,57 +4531,24 @@ function openLogPopup(spot) {
   if (n1mmSentEl) n1mmSentEl.maxLength = rstMaxLen;
   if (n1mmRcvdEl) n1mmRcvdEl.maxLength = rstMaxLen;
 
-  // Show park/summit reference if applicable
-  if (spot.reference) {
-    const sig = spot.source === 'sota' ? 'SOTA' : spot.source === 'pota' ? 'POTA' : spot.source === 'wwff' ? 'WWFF' : spot.source === 'llota' ? 'LLOTA' : '';
-    logRefDisplay.textContent = sig ? `${sig}: ${spot.reference}` : spot.reference;
-    if (spot.parkName) logRefDisplay.textContent += ` — ${spot.parkName}`;
-    if (spot.wwffReference) logRefDisplay.textContent += `\nWWFF: ${spot.wwffReference}` + (spot.wwffParkName ? ` — ${spot.wwffParkName}` : '');
-    logRefDisplay.classList.remove('hidden');
-  } else {
-    logRefDisplay.classList.add('hidden');
+  // Type picker: map spot source to chip type
+  const sourceToType = { pota: 'pota', sota: 'sota', wwff: 'wwff', llota: 'llota', dxc: 'dx' };
+  const mappedType = sourceToType[spot.source] || '';
+  // Pre-fill reference before selectLogType so respot can see it
+  logRefInput.value = spot.reference || '';
+  logRefName.textContent = spot.parkName || '';
+  if (spot.wwffReference) {
+    logRefName.textContent += (logRefName.textContent ? '\n' : '') + 'WWFF: ' + spot.wwffReference + (spot.wwffParkName ? ' — ' + spot.wwffParkName : '');
   }
+  selectLogType(mappedType);
 
-  // Additional Parks section: show for park spots (POTA/WWFF/LLOTA), not SOTA
+  // Additional Parks section reset
   logAddlParksCb.checked = false;
   logAddlParksList.innerHTML = '';
   logAddlParksList.classList.add('hidden');
   logAddlParksAdd.classList.add('hidden');
-  const isParkSpot = spot.reference && ['pota', 'wwff', 'llota'].includes(spot.source);
-  logAddlParksSection.classList.toggle('hidden', !isParkSpot);
 
   logComment.value = '';
-
-  // Re-spot section: single checkbox, auto-determined by spot source
-  const respotSection = document.getElementById('log-respot-section');
-  const respotCheckbox = document.getElementById('log-respot');
-  const respotLabel = document.getElementById('log-respot-label');
-  const respotComment = document.getElementById('log-respot-comment');
-  const respotCommentLabel = document.getElementById('log-respot-comment-label');
-  const targets = myCallsign ? getRespotTargets(spot) : [];
-  if (targets.length) {
-    respotSection.classList.remove('hidden');
-    respotSection.dataset.targets = JSON.stringify(targets);
-    const labelNames = targets.map(t => RESPOT_NAMES[t]).join(' & ');
-    const verb = targets.includes('dxc') ? 'Spot on ' : 'Re-spot on ';
-    // Update checkbox label text — find the text node after the <input>
-    const inputEl = respotLabel.querySelector('input');
-    let labelTextNode = inputEl.nextSibling;
-    if (!labelTextNode || labelTextNode.nodeType !== 3) {
-      labelTextNode = document.createTextNode('');
-      respotLabel.appendChild(labelTextNode);
-    }
-    labelTextNode.textContent = ' ' + verb + labelNames;
-    respotLabel.style.color = SOURCE_COLORS[targets[0]];
-    respotCheckbox.checked = respotDefault;
-    respotComment.value = targets.includes('dxc') ? dxRespotTemplate : respotTemplate;
-    respotCommentLabel.style.display = respotCheckbox.checked ? '' : 'none';
-    respotCheckbox.onchange = () => { respotCommentLabel.style.display = respotCheckbox.checked ? '' : 'none'; };
-  } else {
-    respotSection.classList.add('hidden');
-    respotSection.dataset.targets = '[]';
-    respotCheckbox.checked = false;
-  }
 
   logDialog.showModal();
   // Focus RST Sent so user can immediately type signal report
@@ -4543,18 +4671,19 @@ logSaveBtn.addEventListener('click', async () => {
   const timeOn = time.replace(':', '');     // HHMM
   const band = freqKhzToBand(frequency);
 
-  // Determine SIG/SIG_INFO and program-specific ref fields from spot
+  // Determine SIG/SIG_INFO from type picker + reference input
   let sig = '';
   let sigInfo = '';
   let potaRef = '';
   let sotaRef = '';
   let wwffRef = '';
-  if (currentLogSpot && currentLogSpot.reference) {
-    if (currentLogSpot.source === 'pota') { sig = 'POTA'; potaRef = currentLogSpot.reference; }
-    else if (currentLogSpot.source === 'sota') { sig = 'SOTA'; sotaRef = currentLogSpot.reference; }
-    else if (currentLogSpot.source === 'wwff') { sig = 'WWFF'; wwffRef = currentLogSpot.reference; }
-    else if (currentLogSpot.source === 'llota') sig = 'LLOTA';
-    sigInfo = currentLogSpot.reference;
+  const typedRef = logRefInput.value.trim().toUpperCase();
+  if (logSelectedType && typedRef) {
+    if (logSelectedType === 'pota') { sig = 'POTA'; potaRef = typedRef; }
+    else if (logSelectedType === 'sota') { sig = 'SOTA'; sotaRef = typedRef; }
+    else if (logSelectedType === 'wwff') { sig = 'WWFF'; wwffRef = typedRef; }
+    else if (logSelectedType === 'llota') sig = 'LLOTA';
+    sigInfo = typedRef;
   }
   // Dual-park: POTA spot that's also a WWFF park
   if (currentLogSpot && currentLogSpot.wwffReference) {
@@ -4585,7 +4714,7 @@ logSaveBtn.addEventListener('click', async () => {
   }
 
   // Determine WWFF reference for respot
-  const respotWwffRef = currentLogSpot ? (currentLogSpot.wwffReference || (currentLogSpot.source === 'wwff' ? currentLogSpot.reference : '')) : '';
+  const respotWwffRef = (currentLogSpot && currentLogSpot.wwffReference) ? currentLogSpot.wwffReference : (logSelectedType === 'wwff' ? typedRef : '');
   const commentText = respotComment.value.trim().replace(/\{rst\}/gi, getRstDigits('rst-sent-digits', '59')).replace(/\{QTH\}/gi, grid).replace(/\{mycallsign\}/gi, myCallsign);
 
   const rstSent = getRstDigits('rst-sent-digits', '59');
@@ -4644,7 +4773,7 @@ logSaveBtn.addEventListener('click', async () => {
         wwffRespot: ci === 0 && wantsWwffRespot,
         wwffReference: ci === 0 && wantsWwffRespot ? respotWwffRef : '',
         llotaRespot: ci === 0 && wantsLlotaRespot,
-        llotaReference: ci === 0 && wantsLlotaRespot && currentLogSpot && currentLogSpot.source === 'llota' ? currentLogSpot.reference : '',
+        llotaReference: ci === 0 && wantsLlotaRespot && logSelectedType === 'llota' ? typedRef : '',
         dxcRespot: ci === 0 && wantsDxcRespot,
         respotComment: ci === 0 && (wantsRespot || wantsWwffRespot || wantsLlotaRespot || wantsDxcRespot) ? commentText : '',
       };
@@ -5042,6 +5171,33 @@ async function openSettingsDialog() {
   setQrzPassword.value = s.qrzPassword || '';
   setQrzFullName.checked = s.qrzFullName === true;
   qrzConfig.classList.toggle('hidden', !s.enableQrz);
+  // QRZ Logbook
+  setQrzLogbook.checked = s.qrzLogbook === true;
+  setQrzApiKey.value = s.qrzApiKey || '';
+  qrzLogbookConfig.classList.toggle('hidden', !s.qrzLogbook);
+  updateQrzLogbookVisibility();
+  // Auto-check subscription status on load if QRZ is enabled with credentials
+  if (s.enableQrz && s.qrzUsername && s.qrzPassword) {
+    window.api.qrzCheckSub().then(result => {
+      if (result.subscriber) {
+        qrzSubStatus.textContent = `XML Subscriber \u2014 expires ${result.expiry}`;
+        qrzSubStatus.style.color = '#4ecca3';
+        setQrzLogbook.disabled = false;
+      } else if (result.error) {
+        qrzSubStatus.textContent = result.error;
+        qrzSubStatus.style.color = '#e94560';
+      } else {
+        const msg = result.expiry && result.expiry !== 'non-subscriber'
+          ? `QRZ XML subscription expired (${result.expiry})`
+          : 'No active QRZ XML subscription';
+        qrzSubStatus.textContent = msg;
+        qrzSubStatus.style.color = '#e94560';
+        setQrzLogbook.disabled = true;
+        setQrzLogbook.checked = false;
+        qrzLogbookConfig.classList.add('hidden');
+      }
+    }).catch(() => {});
+  }
   setEnableCluster.checked = s.enableCluster === true;
   setShowBeacons.checked = s.showBeacons === true;
   setShowDxBar.checked = s.showDxBar === true;
@@ -5089,6 +5245,7 @@ async function openSettingsDialog() {
   loggingConfig.classList.toggle('hidden', !s.enableLogging);
   logbookConfig.classList.toggle('hidden', !s.sendToLogbook);
   updateLogbookPortConfig();
+  setColorblind.checked = s.colorblindMode === true;
   setColorRows.checked = s.colorRows !== false; // default true
   setEnableSolar.checked = s.enableSolar === true;
   setEnableBandActivity.checked = s.enableBandActivity === true;
@@ -5186,6 +5343,8 @@ settingsSave.addEventListener('click', async () => {
   const qrzUsername = setQrzUsername.value.trim().toUpperCase();
   const qrzPassword = setQrzPassword.value;
   const qrzFullNameEnabled = setQrzFullName.checked;
+  const qrzLogbookEnabled = setQrzLogbook.checked;
+  const qrzApiKeyVal = setQrzApiKey.value.trim();
   const myCallsign = setMyCallsign.value.trim().toUpperCase();
   let clusterEnabled = setEnableCluster.checked;
   let rbnEnabled = setEnableRbn.checked;
@@ -5211,6 +5370,7 @@ settingsSave.addEventListener('click', async () => {
   const wsjtxPortVal = parseInt(setWsjtxPort.value, 10) || 2237;
   const wsjtxHighlightEnabled = setWsjtxHighlight.checked;
   const wsjtxAutoLogEnabled = setWsjtxAutoLog.checked;
+  const colorblindEnabled = setColorblind.checked;
   const colorRowsEnabled = setColorRows.checked;
   const solarEnabled = setEnableSolar.checked;
   const bandActivityEnabled = setEnableBandActivity.checked;
@@ -5298,6 +5458,8 @@ settingsSave.addEventListener('click', async () => {
     qrzUsername: qrzUsername,
     qrzPassword: qrzPassword,
     qrzFullName: qrzFullNameEnabled,
+    qrzLogbook: qrzLogbookEnabled,
+    qrzApiKey: qrzApiKeyVal,
     enableCluster: clusterEnabled,
     enableRbn: rbnEnabled,
     enableWsjtx: wsjtxEnabled,
@@ -5310,6 +5472,7 @@ settingsSave.addEventListener('click', async () => {
     netReminders: currentNetReminders,
     showBeacons: showBeaconsEnabled,
     showDxBar: showDxBarEnabled,
+    colorblindMode: colorblindEnabled,
     colorRows: colorRowsEnabled,
     enableSolar: solarEnabled,
     enableBandActivity: bandActivityEnabled,
@@ -5383,6 +5546,8 @@ settingsSave.addEventListener('click', async () => {
   updateWsjtxStatusVisibility();
   updateRbnButton();
   spotsTable.classList.toggle('no-source-tint', !colorRowsEnabled);
+  applyColorblindMode(colorblindEnabled);
+  window.api.sendColorblindMode(colorblindEnabled);
   enableSolar = solarEnabled;
   updateSolarVisibility();
   enableBandActivity = bandActivityEnabled;
@@ -6569,7 +6734,7 @@ function renderRbnMarkers() {
   if (rbnHomePos) {
     for (const s of filtered) {
       if (s.lat == null || s.lon == null) continue;
-      const color = RBN_BAND_COLORS[s.band] || '#ffffff';
+      const color = RBN_BAND_COLORS_ACTIVE[s.band] || '#ffffff';
       const arcPoints = greatCircleArc(rbnHomePos.lat, rbnHomePos.lon, s.lat, s.lon, 50);
       for (const offset of [-360, 0, 360]) {
         const offsetPoints = arcPoints.map(([lat, lon]) => [lat, lon + offset]);
@@ -6588,7 +6753,7 @@ function renderRbnMarkers() {
     if (s.lat == null || s.lon == null) continue;
     if (s.band) activeBands.add(s.band);
 
-    const color = RBN_BAND_COLORS[s.band] || '#ffffff';
+    const color = RBN_BAND_COLORS_ACTIVE[s.band] || '#ffffff';
     const distStr = s.distance != null ? formatDistance(s.distance) + ' ' + unit : '';
     const snrStr = s.snr != null ? s.snr + ' dB' : '';
     const wpmStr = s.wpm != null ? s.wpm + ' WPM' : '';
@@ -6627,7 +6792,7 @@ function renderRbnLegend(activeBands) {
     item.className = 'rbn-legend-item';
     const swatch = document.createElement('span');
     swatch.className = 'rbn-legend-swatch';
-    swatch.style.background = RBN_BAND_COLORS[band] || '#fff';
+    swatch.style.background = RBN_BAND_COLORS_ACTIVE[band] || '#fff';
     item.appendChild(swatch);
     item.appendChild(document.createTextNode(band));
     rbnLegendEl.appendChild(item);
@@ -8952,7 +9117,7 @@ async function renderShareImage(pastAct) {
   if (parkLat != null) {
     const parkIcon = L.divIcon({
       className: '',
-      html: '<div style="background:#4ecca3;width:18px;height:18px;border-radius:50%;border:3px solid #fff;box-shadow:0 0 8px rgba(78,204,163,0.6);"></div>',
+      html: `<div style="background:${SOURCE_COLORS_ACTIVE.pota};width:18px;height:18px;border-radius:50%;border:3px solid #fff;box-shadow:0 0 8px rgba(78,204,163,0.6);"></div>`,
       iconSize: [18, 18], iconAnchor: [9, 9],
     });
     L.marker([parkLat, parkLon], { icon: parkIcon, zIndexOffset: 1000 }).addTo(shareMap);
@@ -9129,7 +9294,7 @@ async function renderShareImage(pastAct) {
   const parkLine = shareRefs.length > 0
     ? 'Activated ' + shareRefs.join(', ')
     : 'Activation';
-  ctx.fillStyle = '#4ecca3';
+  ctx.fillStyle = SOURCE_COLORS_ACTIVE.pota;
   ctx.font = 'bold 44px "Segoe UI", sans-serif';
   ctx.fillText(parkLine, safeX, textY);
   textY += 60;

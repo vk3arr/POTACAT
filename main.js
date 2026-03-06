@@ -16,8 +16,8 @@ const { parseAdifFile, parseWorkedQsos, parseAllQsos, parseAllRawQsos, parseSqli
 const { DxClusterClient } = require('./lib/dxcluster');
 const { RbnClient } = require('./lib/rbn');
 const { appendQso, buildAdifRecord, appendImportedQso, appendRawQso, rewriteAdifFile, ADIF_HEADER, adifField } = require('./lib/adif-writer');
-const { SmartSdrClient } = require('./lib/smartsdr');
-const { TciClient } = require('./lib/tci');
+const { SmartSdrClient, setColorblindMode: setSmartSdrColorblind } = require('./lib/smartsdr');
+const { TciClient, setTciColorblindMode } = require('./lib/tci');
 const { IambicKeyer } = require('./lib/keyer');
 const { parsePotaParksCSV } = require('./lib/pota-parks');
 const { WsjtxClient } = require('./lib/wsjtx');
@@ -335,6 +335,10 @@ function sendCatStatus(s) {
 }
 
 function sendCatFrequency(hz) {
+  if (hz > 0 && hz < 100000) {
+    console.warn(`[CAT] Ignoring suspicious frequency: ${hz} Hz (below 100 kHz)`);
+    return;
+  }
   if (win && !win.isDestroyed()) win.webContents.send('cat-frequency', hz);
   _currentFreqHz = hz;
   broadcastRemoteRadioStatus();
@@ -1040,6 +1044,16 @@ async function saveQsoRecord(qsoData) {
     }
   }
 
+  // Upload to QRZ Logbook if enabled (independent of logbook forwarding)
+  if (settings.qrzLogbook && settings.qrzApiKey && !qsoData.skipLogbookForward) {
+    try {
+      await sendToQrzLogbook(qsoData);
+    } catch (qrzErr) {
+      console.error('QRZ Logbook upload failed:', qrzErr.message);
+      return { success: true, qrzError: qrzErr.message };
+    }
+  }
+
   // Re-spot on POTA if requested
   if (qsoData.respot && qsoData.sig === 'POTA' && qsoData.sigInfo && settings.myCallsign) {
     try {
@@ -1310,8 +1324,10 @@ function updateWsjtxHighlights() {
     }
   }
 
-  // Set highlights for active POTA callsigns — green background
-  const bgColor = { r: 78, g: 204, b: 163 }; // #4ecca3 POTA green
+  // Set highlights for active POTA callsigns
+  const bgColor = settings?.colorblindMode
+    ? { r: 79, g: 195, b: 247 }  // #4fc3f7 sky blue (CB-safe)
+    : { r: 78, g: 204, b: 163 }; // #4ecca3 POTA green
   const fgColor = { r: 0, g: 0, b: 0 };
   for (const call of activators) {
     wsjtx.highlightCallsign(call, bgColor, fgColor);
@@ -1439,6 +1455,7 @@ function connectRemote() {
   if (!settings.enableRemote) return;
 
   remoteServer = new RemoteServer();
+  if (settings.colorblindMode) remoteServer.setColorblindMode(true);
 
   remoteServer.on('tune', ({ freqKhz, mode, bearing }) => {
     console.log('[Echo CAT] Tune request:', freqKhz, 'kHz, mode:', mode || '(keep)');
@@ -2586,6 +2603,9 @@ function forwardToLogbook(qsoData) {
   if (type === 'log4om') {
     return sendUdpAdif(qsoData, host, port || 2237);
   }
+  if (type === 'hamrs') {
+    return sendUdpAdif(qsoData, host, port || 2333);
+  }
   if (type === 'hrd') {
     return sendUdpAdif(qsoData, host, port || 2333);
   }
@@ -2682,6 +2702,17 @@ function sendDxkeeperTcp(qsoData, host, port) {
       reject(new Error(`DXKeeper: ${err.message}`));
     });
   });
+}
+
+/**
+ * Upload a QSO to QRZ Logbook via their API.
+ * Throws on failure (caller handles gracefully).
+ */
+async function sendToQrzLogbook(qsoData) {
+  const apiKey = settings.qrzApiKey;
+  if (!apiKey) throw new Error('QRZ API key not configured');
+  const record = buildAdifRecord(qsoData);
+  await QrzClient.uploadQso(apiKey, record, settings.myCallsign || '');
 }
 
 // --- App lifecycle ---
@@ -3600,6 +3631,10 @@ app.whenReady().then(() => {
   Menu.setApplicationMenu(null);
   settings = loadSettings();
   migrateRigSettings(settings);
+  if (settings.colorblindMode) {
+    setSmartSdrColorblind(true);
+    setTciColorblindMode(true);
+  }
 
   // Load cty.dat for DXCC lookups
   try {
@@ -3733,6 +3768,17 @@ app.whenReady().then(() => {
     if (popoutWin && !popoutWin.isDestroyed()) {
       popoutWin.webContents.send('popout-home', data);
     }
+  });
+
+  // Relay colorblind mode to pop-outs and panadapter integrations
+  ipcMain.on('colorblind-mode', (_e, enabled) => {
+    setSmartSdrColorblind(enabled);
+    setTciColorblindMode(enabled);
+    if (popoutWin && !popoutWin.isDestroyed()) popoutWin.webContents.send('colorblind-mode', enabled);
+    if (spotsPopoutWin && !spotsPopoutWin.isDestroyed()) spotsPopoutWin.webContents.send('colorblind-mode', enabled);
+    if (qsoPopoutWin && !qsoPopoutWin.isDestroyed()) qsoPopoutWin.webContents.send('colorblind-mode', enabled);
+    if (actmapPopoutWin && !actmapPopoutWin.isDestroyed()) actmapPopoutWin.webContents.send('colorblind-mode', enabled);
+    if (remoteServer) remoteServer.setColorblindMode(enabled);
   });
 
   // Relay theme changes to pop-out
@@ -4798,6 +4844,26 @@ app.whenReady().then(() => {
     } catch {
       return null;
     }
+  });
+
+  // --- QRZ Logbook API ---
+  ipcMain.handle('qrz-check-sub', async () => {
+    if (!qrz.configured || !settings.enableQrz) {
+      return { subscriber: false, expiry: '', error: 'QRZ not configured' };
+    }
+    try {
+      // Force fresh login to get current SubExp
+      qrz._sessionKey = null;
+      await qrz.login();
+      return { subscriber: qrz.isSubscriber, expiry: qrz.subscriptionExpiry };
+    } catch (err) {
+      return { subscriber: false, expiry: '', error: err.message };
+    }
+  });
+
+  ipcMain.handle('qrz-verify-api-key', async (_e, key) => {
+    if (!key) return { ok: false, message: 'No API key provided' };
+    return QrzClient.checkApiKey(key, settings.myCallsign || '');
   });
 
   // --- Activator Mode: Parks DB IPC ---
