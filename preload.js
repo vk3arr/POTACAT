@@ -98,6 +98,11 @@ contextBridge.exposeInMainWorld('api', {
   spotsPopoutClose: () => ipcRenderer.send('spots-popout-close'),
   sendSpotsPopoutTheme: (theme) => ipcRenderer.send('spots-popout-theme', theme),
   onSpotsPopoutStatus: (cb) => ipcRenderer.on('spots-popout-status', (_e, open) => cb(open)),
+  // DX Cluster terminal pop-out
+  clusterPopoutOpen: () => ipcRenderer.send('cluster-popout-open'),
+  clusterPopoutClose: () => ipcRenderer.send('cluster-popout-close'),
+  sendClusterPopoutTheme: (theme) => ipcRenderer.send('cluster-popout-theme', theme),
+  onClusterPopoutStatus: (cb) => ipcRenderer.on('cluster-popout-status', (_e, open) => cb(open)),
   // Activation map pop-out
   actmapPopoutOpen: () => ipcRenderer.send('actmap-popout-open'),
   actmapPopoutData: (data) => ipcRenderer.send('actmap-popout-data', data),

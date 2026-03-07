@@ -63,6 +63,7 @@ let popoutWin = null; // pop-out map window
 let qsoPopoutWin = null; // pop-out QSO log window
 let actmapPopoutWin = null; // pop-out activation map window
 let spotsPopoutWin = null; // pop-out spots window (activator mode)
+let clusterPopoutWin = null; // pop-out DX cluster terminal window
 let cat = null;
 let spotTimer = null;
 let solarTimer = null;
@@ -534,6 +535,20 @@ function sendClusterStatus() {
   if (win && !win.isDestroyed()) win.webContents.send('cluster-status', s);
 }
 
+function getClusterNodeList() {
+  const nodes = [];
+  for (const [id, entry] of clusterClients) {
+    nodes.push({ id, name: entry.nodeConfig.name, host: entry.nodeConfig.host, connected: entry.client.connected });
+  }
+  return nodes;
+}
+
+function sendClusterNodesToPopout() {
+  if (clusterPopoutWin && !clusterPopoutWin.isDestroyed()) {
+    clusterPopoutWin.webContents.send('cluster-popout-nodes', getClusterNodeList());
+  }
+}
+
 function connectCluster() {
   // Disconnect all existing clients
   for (const [, entry] of clusterClients) {
@@ -600,8 +615,15 @@ function connectCluster() {
       }
     });
 
+    client.on('line', (line) => {
+      if (clusterPopoutWin && !clusterPopoutWin.isDestroyed()) {
+        clusterPopoutWin.webContents.send('cluster-popout-line', { nodeId: node.id, line });
+      }
+    });
+
     client.on('status', () => {
       sendClusterStatus();
+      sendClusterNodesToPopout();
     });
 
     client.connect({
@@ -2792,10 +2814,12 @@ function createWindow() {
     settings.mapPopoutOpen = !!(popoutWin && !popoutWin.isDestroyed());
     settings.qsoPopoutOpen = !!(qsoPopoutWin && !qsoPopoutWin.isDestroyed());
     settings.spotsPopoutOpen = !!(spotsPopoutWin && !spotsPopoutWin.isDestroyed());
+    settings.clusterPopoutOpen = !!(clusterPopoutWin && !clusterPopoutWin.isDestroyed());
     saveSettings(settings);
     if (popoutWin && !popoutWin.isDestroyed()) popoutWin.close();
     if (qsoPopoutWin && !qsoPopoutWin.isDestroyed()) qsoPopoutWin.close();
     if (spotsPopoutWin && !spotsPopoutWin.isDestroyed()) spotsPopoutWin.close();
+    if (clusterPopoutWin && !clusterPopoutWin.isDestroyed()) clusterPopoutWin.close();
   });
 
   // Once the renderer is actually ready to listen, send current state
@@ -2852,6 +2876,10 @@ function createWindow() {
     // Auto-reopen pop-out spots if it was open when the app last closed
     if (settings.spotsPopoutOpen) {
       ipcMain.emit('spots-popout-open');
+    }
+    // Auto-reopen cluster terminal if it was open when the app last closed
+    if (settings.clusterPopoutOpen) {
+      ipcMain.emit('cluster-popout-open');
     }
   });
 }
@@ -3985,6 +4013,86 @@ app.whenReady().then(() => {
     if (win && !win.isDestroyed()) {
       win.webContents.send('popout-open-log', spot);
       win.focus();
+    }
+  });
+
+  // --- DX Cluster Terminal Pop-out ---
+  ipcMain.on('cluster-popout-open', () => {
+    if (clusterPopoutWin && !clusterPopoutWin.isDestroyed()) {
+      clusterPopoutWin.focus();
+      return;
+    }
+
+    const isMac = process.platform === 'darwin';
+    clusterPopoutWin = new BrowserWindow({
+      width: 700,
+      height: 450,
+      title: 'DX Cluster Terminal',
+      show: false,
+      ...(isMac ? { titleBarStyle: 'hiddenInset' } : { frame: false }),
+      icon: getIconPath(),
+      webPreferences: {
+        preload: path.join(__dirname, 'preload-cluster-popout.js'),
+        contextIsolation: true,
+        nodeIntegration: false,
+      },
+    });
+
+    // Restore saved bounds (DPI-aware)
+    const saved = settings.clusterPopoutBounds;
+    if (saved && saved.width > 200 && saved.height > 150 && isOnScreen(saved)) {
+      clusterPopoutWin.setBounds(saved);
+    }
+    clusterPopoutWin.show();
+
+    clusterPopoutWin.setMenuBarVisibility(false);
+    clusterPopoutWin.loadFile(path.join(__dirname, 'renderer', 'cluster-popout.html'));
+
+    clusterPopoutWin.on('close', () => {
+      if (clusterPopoutWin && !clusterPopoutWin.isDestroyed()) {
+        if (!clusterPopoutWin.isMaximized() && !clusterPopoutWin.isMinimized()) {
+          settings.clusterPopoutBounds = clusterPopoutWin.getBounds();
+          saveSettings(settings);
+        }
+      }
+    });
+
+    clusterPopoutWin.on('closed', () => {
+      clusterPopoutWin = null;
+      if (win && !win.isDestroyed()) {
+        win.webContents.send('cluster-popout-status', false);
+      }
+    });
+
+    clusterPopoutWin.webContents.on('did-finish-load', () => {
+      // Send current node list
+      clusterPopoutWin.webContents.send('cluster-popout-nodes', getClusterNodeList());
+      if (win && !win.isDestroyed()) {
+        win.webContents.send('cluster-popout-status', true);
+      }
+    });
+
+    // F12 opens DevTools in pop-out
+    clusterPopoutWin.webContents.on('before-input-event', (_e, input) => {
+      if (input.key === 'F12' && input.type === 'keyDown') {
+        clusterPopoutWin.webContents.toggleDevTools();
+      }
+    });
+  });
+
+  // Cluster pop-out window controls
+  ipcMain.on('cluster-popout-minimize', () => { if (clusterPopoutWin) clusterPopoutWin.minimize(); });
+  ipcMain.on('cluster-popout-maximize', () => {
+    if (!clusterPopoutWin) return;
+    if (clusterPopoutWin.isMaximized()) clusterPopoutWin.unmaximize();
+    else clusterPopoutWin.maximize();
+  });
+  ipcMain.on('cluster-popout-close', () => { if (clusterPopoutWin) clusterPopoutWin.close(); });
+
+  // Relay theme to cluster pop-out
+  ipcMain.on('cluster-popout-theme', (_e, theme) => {
+    if (clusterPopoutWin && !clusterPopoutWin.isDestroyed()) {
+      clusterPopoutWin.webContents.send('cluster-popout-theme', theme);
     }
   });
 

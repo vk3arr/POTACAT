@@ -71,6 +71,7 @@
           <label class="spots-toggle"><input type="checkbox" id="spots-cluster"> <span style="color:#e040fb">DX Cluster</span></label>
           <label class="spots-toggle"><input type="checkbox" id="spots-rbn"> <span style="color:#00bcd4">RBN</span></label>
           <label class="spots-toggle"><input type="checkbox" id="spots-pskr"> <span style="color:#ff6b6b">FreeDV</span></label>
+          <label class="spots-toggle"><input type="checkbox" id="spots-dxe" checked> DX Expeditions</label>
           <div class="spots-panel-divider"></div>
           <div class="spots-panel-section-label">Filters</div>
           <label class="spots-toggle"><input type="checkbox" id="spots-hide-worked"> Hide worked stations</label>
@@ -125,6 +126,7 @@
         <button id="view-map-btn" class="view-btn" title="Map view">Map</button>
         <button id="popout-map-btn" class="view-btn popout-btn" title="Pop-out map window">&#x2197;</button>
         <button id="view-rbn-btn" class="view-btn hidden" title="Reverse Beacon Network">RBN</button>
+        <button id="cluster-terminal-btn" class="view-btn hidden" title="DX Cluster Terminal">Terminal</button>
       </div>
     </div>
     <div class="status-bar">
@@ -726,6 +728,7 @@
         <span class="help-text" style="display:block;margin-top:6px;">Enable up to 3 nodes for simultaneous connections. Duplicate spots are automatically removed.</span>
         <label class="checkbox-label" style="margin-top:6px;"><input type="checkbox" id="set-show-beacons"> Show /B beacon stations</label>
         <label class="checkbox-label" style="margin-top:6px;"><input type="checkbox" id="set-show-dx-bar"> Show DX command bar below spot table</label>
+        <label class="checkbox-label" style="margin-top:6px;"><input type="checkbox" id="set-enable-cluster-terminal"> Show DX Cluster Terminal button</label>
       </div>
       <label class="checkbox-label"><input type="checkbox" id="set-enable-rbn"> Reverse Beacon Network</label>
       <div id="rbn-config" class="radio-sub hidden">

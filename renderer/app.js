@@ -26,6 +26,7 @@ let enableDxcc = false;
 let enableCluster = false;
 let enableRbn = false;
 let enablePskr = false;
+let enableDxe = true;
 let enableSolar = false;
 let enableBandActivity = false;
 let licenseClass = 'none';
@@ -58,6 +59,7 @@ let popoutOpen = false; // pop-out map window is open
 let qsoPopoutOpen = false; // pop-out QSO log window is open
 let spotsPopoutOpen = false; // pop-out spots window is open
 let actmapPopoutOpen = false; // pop-out activation map window is open
+let clusterPopoutOpen = false; // pop-out cluster terminal is open
 let dxccData = null;  // { entities: [...] } from main process
 let enableWsjtx = false;
 let wsjtxDecodes = []; // recent decodes from WSJT-X (FIFO, max 50)
@@ -133,6 +135,7 @@ const spotsLlota = document.getElementById('spots-llota');
 const spotsCluster = document.getElementById('spots-cluster');
 const spotsRbn = document.getElementById('spots-rbn');
 const spotsPskr = document.getElementById('spots-pskr');
+const spotsDxe = document.getElementById('spots-dxe');
 const spotsHideWorked = document.getElementById('spots-hide-worked');
 const spotsHideParks = document.getElementById('spots-hide-parks');
 const spotsHideParksLabel = document.getElementById('spots-hide-parks-label');
@@ -240,6 +243,8 @@ const wsjtxStatusEl = document.getElementById('wsjtx-status');
 const setEnablePskr = document.getElementById('set-enable-pskr');
 const pskrConfig = document.getElementById('pskr-config');
 const setMyCallsign = document.getElementById('set-my-callsign');
+const setEnableClusterTerminal = document.getElementById('set-enable-cluster-terminal');
+const clusterTerminalBtn = document.getElementById('cluster-terminal-btn');
 const clusterConfig = document.getElementById('cluster-config');
 const clusterNodeList = document.getElementById('cluster-node-list');
 const clusterPresetSelect = document.getElementById('cluster-preset-select');
@@ -644,6 +649,7 @@ async function loadPrefs() {
   updateDxCommandBar();
   enableRbn = settings.enableRbn === true; // default false
   enablePskr = settings.enablePskr === true; // default false
+  enableDxe = settings.enableDxe !== false; // default true
   enableSolar = settings.enableSolar === true;   // default false
   // Color rows — default true (on)
   spotsTable.classList.toggle('no-source-tint', settings.colorRows === false);
@@ -683,6 +689,7 @@ async function loadPrefs() {
     });
   }
   updateRbnButton();
+  clusterTerminalBtn.classList.toggle('hidden', !settings.enableClusterTerminal);
   updateDxccButton();
   // Activator mode restore
   if (settings.appMode === 'activator') {
@@ -2139,9 +2146,9 @@ function sortSpots(spots) {
     const aNet = a.source === 'net' ? 1 : 0;
     const bNet = b.source === 'net' ? 1 : 0;
     if (aNet !== bNet) return bNet - aNet;
-    // Pin DX expeditions to the top
-    const aExp = expeditionCallsigns.has(a.callsign.toUpperCase()) ? 1 : 0;
-    const bExp = expeditionCallsigns.has(b.callsign.toUpperCase()) ? 1 : 0;
+    // Pin DX expeditions to the top (only when DXE display enabled)
+    const aExp = enableDxe && expeditionCallsigns.has(a.callsign.toUpperCase()) ? 1 : 0;
+    const bExp = enableDxe && expeditionCallsigns.has(b.callsign.toUpperCase()) ? 1 : 0;
     if (aExp !== bExp) return bExp - aExp;
 
     let va, vb;
@@ -3020,7 +3027,7 @@ function updateMapMarkers(filtered) {
       : '';
     const mapNewPark = workedParksSet.size > 0 && (s.source === 'pota' || s.source === 'wwff') && s.reference && !workedParksSet.has(s.reference);
     const newBadge = mapNewPark ? ` <span style="background:${SOURCE_COLORS_ACTIVE.pota};color:#000;font-size:10px;font-weight:bold;padding:1px 4px;border-radius:3px;">NEW</span>` : '';
-    const expeditionBadge = expeditionCallsigns.has(s.callsign.toUpperCase()) ? ' <span style="background:#ff1744;color:#fff;font-size:10px;font-weight:bold;padding:1px 4px;border-radius:3px;">DXP</span>' : '';
+    const expeditionBadge = enableDxe && expeditionCallsigns.has(s.callsign.toUpperCase()) ? ' <span style="background:#ff1744;color:#fff;font-size:10px;font-weight:bold;padding:1px 4px;border-radius:3px;">DXP</span>' : '';
     const mapEvent = getEventForCallsign(s.callsign);
     const eventBadgeHtml = mapEvent ? ` <span style="background:${mapEvent.badgeColor || '#ff6b00'};color:#fff;font-size:10px;font-weight:bold;padding:1px 4px;border-radius:3px;">${mapEvent.badge || 'EVT'}</span>` : '';
     const wwffBadge = s.wwffReference ? ` <span style="background:${SOURCE_COLORS_ACTIVE.wwff};color:#000;font-size:10px;font-weight:bold;padding:1px 4px;border-radius:3px;">WWFF</span>` : '';
@@ -3039,7 +3046,7 @@ function updateMapMarkers(filtered) {
     // Pin color matches source: POTA green, SOTA orange, DXC purple, etc.
     const oop = isOutOfPrivilege(parseFloat(s.frequency), s.mode, licenseClass);
     const worked = workedQsos.has(s.callsign.toUpperCase());
-    const isExpedition = expeditionCallsigns.has(s.callsign.toUpperCase());
+    const isExpedition = enableDxe && expeditionCallsigns.has(s.callsign.toUpperCase());
     const sourceIcon = sourceIcons[s.source] || sourceIcons.pota;
     const markerOptions = isExpedition
       ? { icon: expeditionIcon, zIndexOffset: 500 }
@@ -3682,6 +3689,15 @@ window.api.onQsoPopoutStatus((open) => {
   qsoPopoutOpen = open;
 });
 
+// --- Cluster Terminal Pop-out ---
+window.api.onClusterPopoutStatus((open) => {
+  clusterPopoutOpen = open;
+});
+
+clusterTerminalBtn.addEventListener('click', () => {
+  window.api.clusterPopoutOpen();
+});
+
 // --- Spots Pop-out ---
 window.api.onSpotsPopoutStatus((open) => {
   spotsPopoutOpen = open;
@@ -3931,7 +3947,7 @@ function enrichSpotsForPopout(filtered) {
     ...s,
     isWorked: workedQsos.has(s.callsign.toUpperCase()),
     isWorkedToday: workedQsos.has(s.callsign.toUpperCase()) && isWorkedSpot(s),
-    isExpedition: expeditionCallsigns.has(s.callsign.toUpperCase()),
+    isExpedition: enableDxe && expeditionCallsigns.has(s.callsign.toUpperCase()),
     isNewPark: workedParksSet.size > 0 && (s.source === 'pota' || s.source === 'wwff') && s.reference && !workedParksSet.has(s.reference),
     isOop: isOutOfPrivilege(parseFloat(s.frequency), s.mode, licenseClass),
     isWatched: watchlist.has(s.callsign.toUpperCase()),
@@ -4137,7 +4153,7 @@ function render() {
       if (s.source === 'llota') tr.classList.add('spot-llota');
       if (s.source === 'pskr') tr.classList.add('spot-pskr');
       if (s.source === 'net') tr.classList.add('spot-net');
-      if (expeditionCallsigns.has(s.callsign.toUpperCase())) tr.classList.add('spot-expedition');
+      if (enableDxe && expeditionCallsigns.has(s.callsign.toUpperCase())) tr.classList.add('spot-expedition');
       if (s.comments && /POTA.?CAT/i.test(s.comments)) tr.classList.add('potacat-respot');
 
       // License privilege check
@@ -4243,7 +4259,7 @@ function render() {
         paw.textContent = '\uD83D\uDC3E';
         callTd.appendChild(paw);
       }
-      if (expeditionCallsigns.has(s.callsign.toUpperCase())) {
+      if (enableDxe && expeditionCallsigns.has(s.callsign.toUpperCase())) {
         const dxp = document.createElement('span');
         dxp.className = 'expedition-badge';
         dxp.title = 'DX Expedition (Club Log)';
@@ -4940,6 +4956,7 @@ function syncSpotsPanel() {
   spotsCluster.checked = enableCluster;
   spotsRbn.checked = enableRbn;
   spotsPskr.checked = enablePskr;
+  spotsDxe.checked = enableDxe;
   spotsHideWorked.checked = hideWorked;
   spotsHideParks.checked = hideWorkedParks;
   spotsHideOob.checked = hideOutOfBand;
@@ -4957,6 +4974,7 @@ document.querySelector('.spots-dropdown-panel').addEventListener('change', async
   enableCluster = spotsCluster.checked;
   enableRbn = spotsRbn.checked;
   enablePskr = spotsPskr.checked;
+  enableDxe = spotsDxe.checked;
 
   // DX Cluster and RBN require a callsign
   if (enableCluster && !myCallsign) {
@@ -4994,7 +5012,7 @@ document.querySelector('.spots-dropdown-panel').addEventListener('change', async
   // Save and let main process handle connect/disconnect
   await window.api.saveSettings({
     enablePota, enableSota, enableWwff, enableLlota,
-    enableCluster, enableRbn, enablePskr,
+    enableCluster, enableRbn, enablePskr, enableDxe,
     hideWorked, hideWorkedParks, hideOutOfBand,
     enableDxcc,
   });
@@ -5053,6 +5071,7 @@ quickLightMode.addEventListener('change', async () => {
   if (qsoPopoutOpen) window.api.sendQsoPopoutTheme(light ? 'light' : 'dark');
   if (actmapPopoutOpen) window.api.actmapPopoutTheme(light ? 'light' : 'dark');
   if (spotsPopoutOpen) window.api.sendSpotsPopoutTheme(light ? 'light' : 'dark');
+  if (clusterPopoutOpen) window.api.sendClusterPopoutTheme(light ? 'light' : 'dark');
   await window.api.saveSettings({ lightMode: light });
 });
 
@@ -5216,6 +5235,8 @@ async function openSettingsDialog() {
     currentClusterNodes = [{ id: Date.now().toString(36), name: preset ? preset.name : host, host, port, enabled: true, preset: preset ? preset.name : null }];
   }
   renderClusterNodeList(currentClusterNodes);
+  setEnableClusterTerminal.checked = s.enableClusterTerminal === true;
+  clusterTerminalBtn.classList.toggle('hidden', !s.enableClusterTerminal);
   // Load net reminders
   currentNetReminders = Array.isArray(s.netReminders) ? JSON.parse(JSON.stringify(s.netReminders)) : [];
   renderNetList(currentNetReminders);
@@ -5366,6 +5387,8 @@ settingsSave.addEventListener('click', async () => {
   const showDxBarEnabled = setShowDxBar.checked;
   showDxBar = showDxBarEnabled;
   updateDxCommandBar();
+  const clusterTerminalEnabled = setEnableClusterTerminal.checked;
+  clusterTerminalBtn.classList.toggle('hidden', !clusterTerminalEnabled);
   const wsjtxEnabled = setEnableWsjtx.checked;
   const wsjtxPortVal = parseInt(setWsjtxPort.value, 10) || 2237;
   const wsjtxHighlightEnabled = setWsjtxHighlight.checked;
@@ -5472,6 +5495,7 @@ settingsSave.addEventListener('click', async () => {
     netReminders: currentNetReminders,
     showBeacons: showBeaconsEnabled,
     showDxBar: showDxBarEnabled,
+    enableClusterTerminal: clusterTerminalEnabled,
     colorblindMode: colorblindEnabled,
     colorRows: colorRowsEnabled,
     enableSolar: solarEnabled,
@@ -5573,6 +5597,7 @@ settingsSave.addEventListener('click', async () => {
   if (qsoPopoutOpen) window.api.sendQsoPopoutTheme(lightModeEnabled ? 'light' : 'dark');
   if (actmapPopoutOpen) window.api.actmapPopoutTheme(lightModeEnabled ? 'light' : 'dark');
   if (spotsPopoutOpen) window.api.sendSpotsPopoutTheme(lightModeEnabled ? 'light' : 'dark');
+  if (clusterPopoutOpen) window.api.sendClusterPopoutTheme(lightModeEnabled ? 'light' : 'dark');
   enableDxcc = dxccEnabled;
   licenseClass = licenseClassVal;
   hideOutOfBand = hideOob;
