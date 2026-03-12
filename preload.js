@@ -70,6 +70,10 @@ contextBridge.exposeInMainWorld('api', {
   onQrzData: (cb) => ipcRenderer.on('qrz-data', (_e, data) => cb(data)),
   onDonorCallsigns: (cb) => ipcRenderer.on('donor-callsigns', (_e, data) => cb(data)),
   onExpeditionCallsigns: (cb) => ipcRenderer.on('expedition-callsigns', (_e, data) => cb(data)),
+  // Directory (HF Nets & SWL Broadcasts)
+  onDirectoryData: (cb) => ipcRenderer.on('directory-data', (_e, data) => cb(data)),
+  fetchDirectory: () => ipcRenderer.send('fetch-directory'),
+  getDirectory: () => ipcRenderer.invoke('get-directory'),
   // Events system
   onActiveEvents: (cb) => ipcRenderer.on('active-events', (_e, data) => cb(data)),
   getActiveEvents: () => ipcRenderer.invoke('get-active-events'),

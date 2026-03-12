@@ -3735,7 +3735,7 @@ dialog input, dialog select {
   position: relative;
 }
 #activator-park-ref {
-  width: 120px;
+  width: 200px;
   font-family: monospace;
   font-size: 14px;
   text-transform: uppercase;
@@ -4116,6 +4116,171 @@ body.activator-rbn-on #rbn-view {
 }
 #activator-log-table tbody tr:hover .act-log-del-btn { opacity: 1; }
 .act-log-del-btn:hover { color: var(--accent-red); }
+
+/* --- Directory View (HF Nets & SWL Broadcasts) --- */
+.directory-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 16px;
+  background: var(--bg-secondary);
+  border-bottom: 1px solid var(--border-primary);
+}
+.directory-tabs {
+  display: flex;
+  gap: 0;
+}
+.directory-tab {
+  background: var(--bg-primary);
+  color: var(--text-secondary);
+  border: 1px solid var(--border-primary);
+  padding: 4px 14px;
+  font-size: 12px;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+.directory-tab:first-child { border-radius: 4px 0 0 4px; }
+.directory-tab:last-child { border-radius: 0 4px 4px 0; border-left: none; }
+.directory-tab.active {
+  background: var(--accent-blue, #4fc3f7);
+  color: #fff;
+  border-color: var(--accent-blue, #4fc3f7);
+}
+.directory-search {
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  border: 1px solid var(--border-primary);
+  border-radius: 4px;
+  padding: 4px 8px;
+  font-size: 12px;
+  width: 180px;
+}
+.directory-refresh {
+  background: none;
+  border: 1px solid var(--border-primary);
+  border-radius: 4px;
+  color: var(--text-secondary);
+  font-size: 16px;
+  cursor: pointer;
+  padding: 2px 8px;
+  line-height: 1;
+}
+.directory-refresh:hover { color: var(--text-primary); }
+.directory-table-container {
+  overflow-y: auto;
+  max-height: 320px;
+}
+#dir-browser {
+  margin-top: 8px;
+}
+.directory-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+.directory-table thead th {
+  position: sticky;
+  top: 0;
+  background: var(--bg-secondary);
+  padding: 6px 8px;
+  text-align: left;
+  font-size: 11px;
+  color: var(--text-secondary);
+  border-bottom: 1px solid var(--border-primary);
+  white-space: nowrap;
+  z-index: 1;
+}
+.directory-table tbody td {
+  padding: 5px 8px;
+  border-bottom: 1px solid var(--border-primary);
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.directory-table tbody tr:hover {
+  background: rgba(79, 195, 247, 0.08);
+}
+.dir-status-col { width: 28px; text-align: center; }
+.dir-name-col { min-width: 120px; }
+.dir-freq-col { width: 80px; }
+.dir-mode-col { width: 50px; }
+.dir-days-col { width: 80px; }
+.dir-time-col { width: 80px; }
+.dir-dur-col { width: 40px; }
+.dir-region-col { width: 100px; }
+.dir-lang-col { width: 60px; }
+.dir-power-col { width: 60px; }
+.dir-notes-col { min-width: 100px; max-width: 250px; }
+.dir-status-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--text-tertiary);
+}
+.dir-status-dot.on-air { background: #4ecca3; }
+.dir-action-col { width: 55px; text-align: center; }
+.dir-add-btn {
+  background: none;
+  border: 1px solid var(--accent-blue, #4fc3f7);
+  border-radius: 3px;
+  color: var(--accent-blue, #4fc3f7);
+  font-size: 11px;
+  cursor: pointer;
+  padding: 2px 8px;
+}
+.dir-add-btn:hover { background: rgba(79, 195, 247, 0.15); }
+.dir-added-label {
+  font-size: 10px;
+  color: var(--text-tertiary);
+}
+.dir-hover-popup {
+  position: fixed;
+  z-index: 10001;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-primary);
+  border-radius: 6px;
+  padding: 10px 14px;
+  font-size: 12px;
+  color: var(--text-primary);
+  max-width: 360px;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.35);
+  pointer-events: none;
+  line-height: 1.5;
+  word-wrap: break-word;
+}
+.dir-hover-popup .dir-popup-field {
+  margin-bottom: 4px;
+}
+.dir-hover-popup .dir-popup-label {
+  color: var(--text-secondary);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+.dir-suggest-link {
+  padding: 8px 0 4px;
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+.dir-suggest-link a {
+  color: var(--accent-blue, #4fc3f7);
+  text-decoration: none;
+}
+.dir-suggest-link a:hover { text-decoration: underline; }
+.dir-name-link {
+  color: var(--accent-blue, #4fc3f7);
+  text-decoration: none;
+  cursor: pointer;
+}
+.dir-name-link:hover { text-decoration: underline; }
+#dir-placeholder {
+  padding: 32px;
+  text-align: center;
+  color: var(--text-secondary);
+  font-size: 13px;
+}
 
 /* Settings radio labels */
 .radio-label { cursor: pointer; display: inline-flex; align-items: center; gap: 4px; }

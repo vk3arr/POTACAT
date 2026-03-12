@@ -169,6 +169,7 @@ const setHideOutOfBand = document.getElementById('set-hide-out-of-band');
 const setHideWorked = document.getElementById('set-hide-worked');
 const setTuneClick = document.getElementById('set-tune-click');
 const setEnableSplit = document.getElementById('set-enable-split');
+const setEnableAtu = document.getElementById('set-enable-atu');
 const setEnableRotor = document.getElementById('set-enable-rotor');
 const rotorConfig = document.getElementById('rotor-config');
 const setRotorHost = document.getElementById('set-rotor-host');
@@ -317,6 +318,27 @@ const rbnTableContainer = document.getElementById('rbn-table-container');
 const rbnTableBody = document.getElementById('rbn-table-body');
 const rbnDistHeader = document.getElementById('rbn-dist-header');
 const rbnBandFilterEl = document.getElementById('rbn-band-filter');
+// Directory browser (inside Settings > Net Reminders)
+const setEnableDirectory = document.getElementById('set-enable-directory');
+const dirControls = document.getElementById('dir-controls');
+const dirBrowseBtn = document.getElementById('dir-browse-btn');
+const dirBrowser = document.getElementById('dir-browser');
+const dirCloseBtn = document.getElementById('dir-close-btn');
+const dirTabNets = document.getElementById('dir-tab-nets');
+const dirTabSwl = document.getElementById('dir-tab-swl');
+const dirSearchInput = document.getElementById('dir-search');
+const dirRefreshBtn = document.getElementById('dir-refresh-btn');
+const dirNetsContainer = document.getElementById('dir-nets-container');
+const dirSwlContainer = document.getElementById('dir-swl-container');
+const dirNetsBody = document.getElementById('dir-nets-body');
+const dirSwlBody = document.getElementById('dir-swl-body');
+const dirPlaceholder = document.getElementById('dir-placeholder');
+const dirHoverPopup = document.getElementById('dir-hover-popup');
+const dirSuggestSheet = document.getElementById('dir-suggest-sheet');
+const DIR_SHEET_URL = 'https://docs.google.com/spreadsheets/d/1fg6ZX9DokyThbvHO4VXKcKhKsscy7RYidmERrOB1inc/edit?usp=sharing';
+let directoryNets = [];
+let directorySwl = [];
+let dirActiveTab = 'nets'; // 'nets' or 'swl'
 const rbnMaxAgeInput = document.getElementById('rbn-max-age');
 const rbnAgeUnitSelect = document.getElementById('rbn-age-unit');
 const setPotaParksPath = document.getElementById('set-pota-parks-path');
@@ -3550,11 +3572,14 @@ async function openQuickRespot() {
   // Comment template — pick based on network type
   const commentField = document.getElementById('respot-comment');
   const tmpl = targets.includes('dxc') ? dxRespotTemplate : respotTemplate;
+  const spotQrz = s.callsign ? qrzData.get(s.callsign.toUpperCase().split('/')[0]) : null;
+  const spotFirstname = (spotQrz && (cleanQrzName(spotQrz.nickname) || cleanQrzName(spotQrz.fname))) || 'OM';
   commentField.value = tmpl
     .replace(/\{QTH\}/gi, grid)
     .replace(/\{rst\}/gi, '')
     .replace(/\{callsign\}/gi, myCallsign)
-    .replace(/\{mycallsign\}/gi, myCallsign);
+    .replace(/\{mycallsign\}/gi, myCallsign)
+    .replace(/\{op_firstname\}/gi, spotFirstname);
 
   dlg.showModal();
 }
@@ -4846,7 +4871,11 @@ logSaveBtn.addEventListener('click', async () => {
 
   // Determine WWFF reference for respot
   const respotWwffRef = (currentLogSpot && currentLogSpot.wwffReference) ? currentLogSpot.wwffReference : (logSelectedType === 'wwff' ? typedRef : '');
-  const commentText = respotComment.value.trim().replace(/\{rst\}/gi, getRstDigits('rst-sent-digits', '59')).replace(/\{QTH\}/gi, grid).replace(/\{mycallsign\}/gi, myCallsign);
+  // Resolve {op_firstname} from QRZ data for the primary callsign; fall back to "OM"
+  const primaryCall = callsigns[0] || '';
+  const primaryQrz = qrzData.get(primaryCall.split('/')[0]);
+  const opFirstname = (primaryQrz && (cleanQrzName(primaryQrz.nickname) || cleanQrzName(primaryQrz.fname))) || 'OM';
+  const commentText = respotComment.value.trim().replace(/\{rst\}/gi, getRstDigits('rst-sent-digits', '59')).replace(/\{QTH\}/gi, grid).replace(/\{mycallsign\}/gi, myCallsign).replace(/\{op_firstname\}/gi, opFirstname);
 
   const rstSent = getRstDigits('rst-sent-digits', '59');
   const rstRcvd = getRstDigits('rst-rcvd-digits', '59');
@@ -5360,6 +5389,7 @@ async function openSettingsDialog() {
   buildAgBandMap(s.agBandMap || {});
   agConfig.classList.toggle('hidden', !s.enableAntennaGenius);
   setEnableSplit.checked = s.enableSplit === true;
+  setEnableAtu.checked = s.enableAtu === true;
   setVerboseLog.checked = s.verboseLog === true;
   setLightIcon.checked = s.lightIcon === true;
   setEnablePota.checked = s.enablePota !== false;
@@ -5423,6 +5453,11 @@ async function openSettingsDialog() {
   renderNetList(currentNetReminders);
   netEditor.classList.add('hidden');
   netAddBtn.classList.remove('hidden');
+  // Directory opt-in
+  setEnableDirectory.checked = s.enableDirectory === true;
+  dirControls.classList.toggle('hidden', !s.enableDirectory);
+  if (dirBrowser) dirBrowser.classList.add('hidden');
+  if (dirBrowseBtn) dirBrowseBtn.classList.remove('hidden');
   clusterConfig.classList.toggle('hidden', !s.enableCluster);
   rbnConfig.classList.toggle('hidden', !s.enableRbn);
   setEnableWsjtx.checked = s.enableWsjtx === true;
@@ -5604,6 +5639,7 @@ settingsSave.addEventListener('click', async () => {
   const agRadioPortVal = parseInt(setAgRadioPort.value, 10) || 1;
   const agBandMapVal = getAgBandMap();
   const enableSplitEnabled = setEnableSplit.checked;
+  const atuEnabled = setEnableAtu.checked;
   const verboseLogEnabled = setVerboseLog.checked;
   const lightIconEnabled = setLightIcon.checked;
   const disableAutoUpdate = setDisableAutoUpdate.checked;
@@ -5688,6 +5724,7 @@ settingsSave.addEventListener('click', async () => {
     myCallsign: myCallsign,
     clusterNodes: clusterNodes,
     netReminders: currentNetReminders,
+    enableDirectory: setEnableDirectory.checked,
     showBeacons: showBeaconsEnabled,
     showDxBar: showDxBarEnabled,
     enableClusterTerminal: clusterTerminalEnabled,
@@ -5714,6 +5751,7 @@ settingsSave.addEventListener('click', async () => {
     agRadioPort: agRadioPortVal,
     agBandMap: agBandMapVal,
     enableSplit: enableSplitEnabled,
+    enableAtu: atuEnabled,
     verboseLog: verboseLogEnabled,
     lightIcon: lightIconEnabled,
     potaParksPath: potaParksPath,
@@ -6542,6 +6580,332 @@ window.api.onActiveEvents((events) => {
     if (ev) renderEventBoard(ev);
   }
   render(); // re-render table for badges
+});
+
+// --- Directory (HF Nets & SWL Broadcasts) ---
+
+function isNetActiveNow(net) {
+  if (!net.startTimeUtc) return false;
+  const now = new Date();
+  const utcH = now.getUTCHours();
+  const utcM = now.getUTCMinutes();
+  const nowMin = utcH * 60 + utcM;
+  const parts = net.startTimeUtc.split(':');
+  const startMin = parseInt(parts[0], 10) * 60 + parseInt(parts[1] || '0', 10);
+  const endMin = startMin + (net.duration || 60);
+  // Check day of week
+  const days = (net.days || 'Daily').toLowerCase();
+  if (days !== 'daily') {
+    const dayNames = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'];
+    const todayAbbr = dayNames[now.getUTCDay()];
+    if (!days.includes(todayAbbr) && !days.includes(dayNames[now.getUTCDay()].substring(0, 2))) {
+      return false;
+    }
+  }
+  if (endMin > 1440) {
+    // Wraps midnight
+    return nowMin >= startMin || nowMin < (endMin - 1440);
+  }
+  return nowMin >= startMin && nowMin < endMin;
+}
+
+function isSwlOnAirNow(entry) {
+  if (!entry.startTimeUtc || !entry.endTimeUtc) return false;
+  const now = new Date();
+  const utcH = now.getUTCHours();
+  const utcM = now.getUTCMinutes();
+  const nowMin = utcH * 60 + utcM;
+  const sp = entry.startTimeUtc.split(':');
+  const ep = entry.endTimeUtc.split(':');
+  const startMin = parseInt(sp[0], 10) * 60 + parseInt(sp[1] || '0', 10);
+  let endMin = parseInt(ep[0], 10) * 60 + parseInt(ep[1] || '0', 10);
+  if (entry.endTimeUtc === '24:00') endMin = 1440;
+  if (endMin <= startMin) {
+    // Wraps midnight
+    return nowMin >= startMin || nowMin < endMin;
+  }
+  return nowMin >= startMin && nowMin < endMin;
+}
+
+function renderDirectory() {
+  if (!dirBrowser || dirBrowser.classList.contains('hidden')) return;
+  const search = (dirSearchInput.value || '').toLowerCase().trim();
+  if (dirActiveTab === 'nets') {
+    renderNetsTable(search);
+  } else {
+    renderSwlTable(search);
+  }
+}
+
+function renderNetsTable(search) {
+  dirNetsBody.innerHTML = '';
+  let filtered = directoryNets;
+  if (search) {
+    filtered = filtered.filter(n =>
+      (n.name || '').toLowerCase().includes(search) ||
+      (n.region || '').toLowerCase().includes(search) ||
+      (n.notes || '').toLowerCase().includes(search) ||
+      (n.mode || '').toLowerCase().includes(search) ||
+      String(n.frequency).includes(search)
+    );
+  }
+  if (filtered.length === 0) {
+    dirPlaceholder.textContent = directoryNets.length === 0 ? 'Loading directory data...' : 'No matching nets found.';
+    dirPlaceholder.classList.remove('hidden');
+    return;
+  }
+  dirPlaceholder.classList.add('hidden');
+  // Sort: on-air first, then by name
+  filtered.sort((a, b) => {
+    const aOn = isNetActiveNow(a) ? 0 : 1;
+    const bOn = isNetActiveNow(b) ? 0 : 1;
+    if (aOn !== bOn) return aOn - bOn;
+    return (a.name || '').localeCompare(b.name || '');
+  });
+  for (const net of filtered) {
+    const tr = document.createElement('tr');
+    const onAir = isNetActiveNow(net);
+    const dot = onAir ? '<span class="dir-status-dot on-air"></span>' : '<span class="dir-status-dot"></span>';
+    const nameCell = net.url
+      ? `<a class="dir-name-link" href="#" data-url="${net.url.replace(/"/g, '&quot;')}">${esc(net.name)}</a>`
+      : esc(net.name);
+    const duration = net.duration ? `${net.duration}m` : '';
+    const alreadyAdded = currentNetReminders.some(r =>
+      r.name === net.name && r.frequency === net.frequency
+    );
+    const actionCell = alreadyAdded
+      ? '<span class="dir-added-label">Added</span>'
+      : '<button class="dir-add-btn" type="button">+ Add</button>';
+    tr.innerHTML = `<td class="dir-status-col">${dot}</td>`
+      + `<td class="dir-name-col">${nameCell}</td>`
+      + `<td class="dir-freq-col">${net.frequency || ''}</td>`
+      + `<td class="dir-mode-col">${esc(net.mode)}</td>`
+      + `<td class="dir-days-col">${esc(net.days)}</td>`
+      + `<td class="dir-time-col">${esc(net.startTimeUtc)}</td>`
+      + `<td class="dir-dur-col">${duration}</td>`
+      + `<td class="dir-region-col">${esc(net.region)}</td>`
+      + `<td class="dir-notes-col">${esc(net.notes)}</td>`
+      + `<td class="dir-action-col">${actionCell}</td>`;
+    // Hover popup
+    attachDirHover(tr, [
+      { label: 'Net', value: net.name },
+      { label: 'Frequency', value: net.frequency ? `${net.frequency} kHz` : '' },
+      { label: 'Mode', value: net.mode },
+      { label: 'Schedule', value: `${net.days || 'Daily'} at ${net.startTimeUtc || '?'} UTC` },
+      { label: 'Duration', value: duration },
+      { label: 'Region', value: net.region },
+      { label: 'Notes', value: net.notes },
+    ]);
+    // Add to My Nets
+    const addBtn = tr.querySelector('.dir-add-btn');
+    if (addBtn) {
+      addBtn.addEventListener('click', () => {
+        addDirectoryNetToReminders(net);
+        renderDirectory();
+        renderNetList(currentNetReminders);
+      });
+    }
+    // URL link
+    const link = tr.querySelector('.dir-name-link');
+    if (link) {
+      link.addEventListener('click', (e) => {
+        e.preventDefault();
+        window.api.openExternal(link.dataset.url);
+      });
+    }
+    dirNetsBody.appendChild(tr);
+  }
+}
+
+function renderSwlTable(search) {
+  dirSwlBody.innerHTML = '';
+  let filtered = directorySwl;
+  if (search) {
+    filtered = filtered.filter(e =>
+      (e.station || '').toLowerCase().includes(search) ||
+      (e.language || '').toLowerCase().includes(search) ||
+      (e.regionTarget || '').toLowerCase().includes(search) ||
+      (e.notes || '').toLowerCase().includes(search) ||
+      String(e.frequency).includes(search)
+    );
+  }
+  if (filtered.length === 0) {
+    dirPlaceholder.textContent = directorySwl.length === 0 ? 'Loading directory data...' : 'No matching broadcasts found.';
+    dirPlaceholder.classList.remove('hidden');
+    return;
+  }
+  dirPlaceholder.classList.add('hidden');
+  // Sort: on-air first, then by station name
+  filtered.sort((a, b) => {
+    const aOn = isSwlOnAirNow(a) ? 0 : 1;
+    const bOn = isSwlOnAirNow(b) ? 0 : 1;
+    if (aOn !== bOn) return aOn - bOn;
+    return (a.station || '').localeCompare(b.station || '');
+  });
+  for (const entry of filtered) {
+    const tr = document.createElement('tr');
+    const onAir = isSwlOnAirNow(entry);
+    const dot = onAir ? '<span class="dir-status-dot on-air"></span>' : '<span class="dir-status-dot"></span>';
+    const powerStr = entry.powerKw ? `${entry.powerKw} kW` : '';
+    tr.innerHTML = `<td class="dir-status-col">${dot}</td>`
+      + `<td class="dir-name-col">${esc(entry.station)}</td>`
+      + `<td class="dir-freq-col">${entry.frequency || ''}</td>`
+      + `<td class="dir-mode-col">${esc(entry.mode)}</td>`
+      + `<td class="dir-time-col">${esc(entry.startTimeUtc)}</td>`
+      + `<td class="dir-time-col">${esc(entry.endTimeUtc)}</td>`
+      + `<td class="dir-lang-col">${esc(entry.language)}</td>`
+      + `<td class="dir-power-col">${powerStr}</td>`
+      + `<td class="dir-region-col">${esc(entry.regionTarget)}</td>`
+      + `<td class="dir-notes-col">${esc(entry.notes)}</td>`;
+    // Hover popup
+    attachDirHover(tr, [
+      { label: 'Station', value: entry.station },
+      { label: 'Frequency', value: entry.frequency ? `${entry.frequency} kHz` : '' },
+      { label: 'Mode', value: entry.mode },
+      { label: 'Schedule', value: `${entry.startTimeUtc || '?'} \u2013 ${entry.endTimeUtc || '?'} UTC` },
+      { label: 'Language', value: entry.language },
+      { label: 'Power', value: powerStr },
+      { label: 'Target', value: entry.regionTarget },
+      { label: 'Notes', value: entry.notes },
+    ]);
+    dirSwlBody.appendChild(tr);
+  }
+}
+
+function esc(str) {
+  if (!str) return '';
+  return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+// Hover popup for directory rows
+let dirHoverTimer = null;
+function attachDirHover(tr, fields) {
+  tr.addEventListener('mouseenter', (e) => {
+    dirHoverTimer = setTimeout(() => {
+      if (!dirHoverPopup) return;
+      let html = '';
+      for (const f of fields) {
+        if (!f.value) continue;
+        html += `<div class="dir-popup-field"><span class="dir-popup-label">${esc(f.label)}</span><br>${esc(f.value)}</div>`;
+      }
+      if (!html) return;
+      dirHoverPopup.innerHTML = html;
+      dirHoverPopup.classList.remove('hidden');
+      // Position near cursor, keep within viewport
+      const rect = dirHoverPopup.getBoundingClientRect();
+      let x = e.clientX + 12;
+      let y = e.clientY + 12;
+      if (x + rect.width > window.innerWidth - 8) x = e.clientX - rect.width - 12;
+      if (y + rect.height > window.innerHeight - 8) y = e.clientY - rect.height - 12;
+      dirHoverPopup.style.left = x + 'px';
+      dirHoverPopup.style.top = y + 'px';
+    }, 350);
+  });
+  tr.addEventListener('mouseleave', () => {
+    clearTimeout(dirHoverTimer);
+    if (dirHoverPopup) dirHoverPopup.classList.add('hidden');
+  });
+  tr.addEventListener('mousemove', (e) => {
+    if (!dirHoverPopup || dirHoverPopup.classList.contains('hidden')) return;
+    const rect = dirHoverPopup.getBoundingClientRect();
+    let x = e.clientX + 12;
+    let y = e.clientY + 12;
+    if (x + rect.width > window.innerWidth - 8) x = e.clientX - rect.width - 12;
+    if (y + rect.height > window.innerHeight - 8) y = e.clientY - rect.height - 12;
+    dirHoverPopup.style.left = x + 'px';
+    dirHoverPopup.style.top = y + 'px';
+  });
+}
+
+// Google Sheet suggestion link
+if (dirSuggestSheet) dirSuggestSheet.addEventListener('click', (e) => {
+  e.preventDefault();
+  window.api.openExternal(DIR_SHEET_URL);
+});
+
+// Add a directory net to My Net Reminders
+function addDirectoryNetToReminders(net) {
+  // Parse days from the directory entry to build a schedule
+  const daysStr = (net.days || 'Daily').toLowerCase();
+  let schedule;
+  if (daysStr === 'daily') {
+    schedule = { type: 'daily' };
+  } else {
+    const dayMap = { sun: 0, mon: 1, tue: 2, wed: 3, thu: 4, fri: 5, sat: 6 };
+    const dayNums = [];
+    for (const [abbr, num] of Object.entries(dayMap)) {
+      if (daysStr.includes(abbr)) dayNums.push(num);
+    }
+    schedule = dayNums.length > 0 ? { type: 'weekly', days: dayNums } : { type: 'daily' };
+  }
+  const newNet = {
+    id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
+    name: net.name,
+    frequency: net.frequency,
+    mode: net.mode || 'SSB',
+    startTime: net.startTimeUtc || '00:00',
+    timeZone: 'utc',
+    duration: net.duration || 60,
+    leadTime: 15,
+    schedule,
+    enabled: true,
+  };
+  currentNetReminders.push(newNet);
+}
+
+// Directory tab switching
+if (dirTabNets) dirTabNets.addEventListener('click', () => {
+  dirActiveTab = 'nets';
+  dirTabNets.classList.add('active');
+  dirTabSwl.classList.remove('active');
+  dirNetsContainer.classList.remove('hidden');
+  dirSwlContainer.classList.add('hidden');
+  renderDirectory();
+});
+if (dirTabSwl) dirTabSwl.addEventListener('click', () => {
+  dirActiveTab = 'swl';
+  dirTabSwl.classList.add('active');
+  dirTabNets.classList.remove('active');
+  dirSwlContainer.classList.remove('hidden');
+  dirNetsContainer.classList.add('hidden');
+  renderDirectory();
+});
+
+// Directory search
+if (dirSearchInput) dirSearchInput.addEventListener('input', () => { renderDirectory(); });
+
+// Directory refresh button
+if (dirRefreshBtn) dirRefreshBtn.addEventListener('click', () => { window.api.fetchDirectory(); });
+
+// Directory opt-in checkbox
+if (setEnableDirectory) setEnableDirectory.addEventListener('change', () => {
+  const on = setEnableDirectory.checked;
+  dirControls.classList.toggle('hidden', !on);
+  if (!on && dirBrowser) {
+    dirBrowser.classList.add('hidden');
+    dirBrowseBtn.classList.remove('hidden');
+  }
+});
+
+// Browse / close directory browser
+if (dirBrowseBtn) dirBrowseBtn.addEventListener('click', () => {
+  dirBrowser.classList.remove('hidden');
+  dirBrowseBtn.classList.add('hidden');
+  if (directoryNets.length === 0 && directorySwl.length === 0) {
+    window.api.fetchDirectory();
+  }
+  renderDirectory();
+});
+if (dirCloseBtn) dirCloseBtn.addEventListener('click', () => {
+  dirBrowser.classList.add('hidden');
+  dirBrowseBtn.classList.remove('hidden');
+});
+
+// Receive directory data from main process
+window.api.onDirectoryData((data) => {
+  directoryNets = data.nets || [];
+  directorySwl = data.swl || [];
+  renderDirectory();
 });
 
 // --- Worked parks listener ---
@@ -8911,14 +9275,29 @@ let parkSearchTimeout = null;
 if (activatorParkRefInput) {
   activatorParkRefInput.addEventListener('input', () => {
     clearTimeout(parkSearchTimeout);
-    const query = activatorParkRefInput.value.trim();
-    if (query.length < 2) {
+    const fullVal = activatorParkRefInput.value.trim().toUpperCase();
+    // Support comma-separated park refs — parse all segments
+    const segments = fullVal.split(',').map(s => s.trim()).filter(Boolean);
+    const lastSeg = segments.length > 0 ? segments[segments.length - 1] : '';
+
+    if (!fullVal) {
       activatorParkDropdown.classList.add('hidden');
-      // Disable start if park cleared
       activatorStartBtn.disabled = true;
       activatorParkNameEl.textContent = '';
       activatorParkRefs = [];
       updateParkExtraBadge();
+      return;
+    }
+
+    // Resolve completed segments (before the last comma) into activatorParkRefs
+    if (segments.length > 1) {
+      parseCommaSeparatedParks(segments);
+    }
+
+    // Only search for the last segment (the one being typed)
+    const query = lastSeg;
+    if (query.length < 2) {
+      activatorParkDropdown.classList.add('hidden');
       return;
     }
     parkSearchTimeout = setTimeout(async () => {
@@ -8932,16 +9311,22 @@ if (activatorParkRefInput) {
         const item = document.createElement('div');
         item.className = 'activator-dropdown-item';
         item.innerHTML = `<span class="activator-dropdown-ref">${park.reference}</span><span class="activator-dropdown-name">${park.name || ''}</span><span class="activator-dropdown-loc">${park.locationDesc || ''}</span>`;
-        item.addEventListener('mousedown', (e) => { e.preventDefault(); selectPark(park); });
+        item.addEventListener('mousedown', (e) => {
+          e.preventDefault();
+          selectParkMulti(park);
+        });
         activatorParkDropdown.appendChild(item);
       }
       activatorParkDropdown.classList.remove('hidden');
     }, 150);
   });
 
-  // Close dropdown on blur
+  // Close dropdown on blur — also finalize comma-separated refs
   activatorParkRefInput.addEventListener('blur', () => {
-    setTimeout(() => activatorParkDropdown.classList.add('hidden'), 150);
+    setTimeout(() => {
+      activatorParkDropdown.classList.add('hidden');
+      finalizeCommaSeparatedParks();
+    }, 150);
   });
 
   // Allow Enter to select first dropdown item
@@ -8951,6 +9336,9 @@ if (activatorParkRefInput) {
       if (first && !activatorParkDropdown.classList.contains('hidden')) {
         first.click();
         e.preventDefault();
+      } else {
+        // No dropdown — finalize comma-separated refs
+        finalizeCommaSeparatedParks();
       }
     }
   });
@@ -8985,9 +9373,114 @@ function selectPark(park) {
   window.api.saveSettings({ activatorParkRefs });
 }
 
+/** Select a park from dropdown when in multi-park (comma-separated) mode */
+function selectParkMulti(park) {
+  // Replace the last segment in the input with the selected park ref
+  const fullVal = activatorParkRefInput.value;
+  const lastComma = fullVal.lastIndexOf(',');
+  const prefix = lastComma >= 0 ? fullVal.substring(0, lastComma + 1) + ' ' : '';
+  activatorParkRefInput.value = prefix + park.reference;
+  activatorParkDropdown.classList.add('hidden');
+
+  // Rebuild activatorParkRefs from the full input
+  const segments = activatorParkRefInput.value.split(',').map(s => s.trim().toUpperCase()).filter(Boolean);
+  activatorParkRefs = segments.map(ref => ({ ref, name: '' }));
+  // Fill in the selected park's name for the last one
+  activatorParkRefs[activatorParkRefs.length - 1].name = park.name || '';
+
+  // Look up names for any earlier refs we don't have names for
+  for (let i = 0; i < activatorParkRefs.length - 1; i++) {
+    if (!activatorParkRefs[i].name) {
+      window.api.getPark(activatorParkRefs[i].ref).then(p => {
+        if (p) { activatorParkRefs[i].name = p.name || ''; updateParkExtraBadge(); }
+      }).catch(() => {});
+    }
+  }
+
+  // Display: show first park name, badge shows +N
+  if (activatorParkRefs.length === 1) {
+    activatorParkNameEl.textContent = park.name || '';
+  } else {
+    activatorParkNameEl.textContent = (activatorParkRefs[0].name || activatorParkRefs[0].ref);
+  }
+  updateParkExtraBadge();
+
+  // Grid from the first park
+  const gridInput = document.getElementById('activator-grid');
+  if (activatorParkRefs.length === 1 && park.latitude && park.longitude) {
+    activatorParkGrid = latLonToGridLocal(parseFloat(park.latitude), parseFloat(park.longitude));
+    if (gridInput) gridInput.value = activatorParkGrid;
+  }
+
+  activatorStartBtn.disabled = false;
+  window.api.saveSettings({ activatorParkRefs });
+}
+
+/** Parse comma-separated park refs typed directly (without dropdown selection) */
+function parseCommaSeparatedParks(segments) {
+  // Rebuild activatorParkRefs from completed segments
+  const newRefs = segments.map(ref => {
+    const existing = activatorParkRefs.find(p => p.ref === ref);
+    return existing || { ref, name: '' };
+  });
+  activatorParkRefs = newRefs;
+
+  if (activatorParkRefs.length > 0) {
+    activatorStartBtn.disabled = false;
+    updateParkExtraBadge();
+  }
+}
+
+/** Finalize comma-separated refs on blur/Enter — look up names, set grid from first park */
+function finalizeCommaSeparatedParks() {
+  const fullVal = activatorParkRefInput.value.trim().toUpperCase();
+  if (!fullVal) return;
+  const segments = fullVal.split(',').map(s => s.trim()).filter(Boolean);
+  if (segments.length === 0) return;
+
+  activatorParkRefs = segments.map(ref => {
+    const existing = activatorParkRefs.find(p => p.ref === ref);
+    return existing || { ref, name: '' };
+  });
+
+  // Look up names for refs we don't have
+  for (let i = 0; i < activatorParkRefs.length; i++) {
+    if (!activatorParkRefs[i].name) {
+      const idx = i;
+      window.api.getPark(activatorParkRefs[idx].ref).then(p => {
+        if (p) {
+          activatorParkRefs[idx].name = p.name || '';
+          if (idx === 0) activatorParkNameEl.textContent = p.name || '';
+          // Set grid from first park if not already set
+          if (idx === 0 && p.latitude && p.longitude) {
+            activatorParkGrid = latLonToGridLocal(parseFloat(p.latitude), parseFloat(p.longitude));
+            const gridInput = document.getElementById('activator-grid');
+            if (gridInput) gridInput.value = activatorParkGrid;
+          }
+          updateParkExtraBadge();
+        }
+      }).catch(() => {});
+    }
+  }
+
+  if (activatorParkRefs.length === 1) {
+    activatorParkNameEl.textContent = activatorParkRefs[0].name || '';
+  } else {
+    activatorParkNameEl.textContent = activatorParkRefs[0].name || activatorParkRefs[0].ref;
+  }
+  updateParkExtraBadge();
+  activatorStartBtn.disabled = false;
+  window.api.saveSettings({ activatorParkRefs });
+}
+
 /** Update the park display: input value, name, and extra badge */
 function updateParkDisplay() {
-  activatorParkRefInput.value = primaryParkRef();
+  // Show comma-separated refs if multiple parks
+  if (activatorParkRefs.length > 1) {
+    activatorParkRefInput.value = activatorParkRefs.map(p => p.ref).join(', ');
+  } else {
+    activatorParkRefInput.value = primaryParkRef();
+  }
   activatorParkNameEl.textContent = primaryParkName();
   updateParkExtraBadge();
 }
@@ -9745,7 +10238,7 @@ function addMultiparkSlot(ref, name) {
   slot.className = 'multipark-slot';
   slot.innerHTML = `
     <div class="multipark-slot-row">
-      <input type="text" class="multipark-ref-input" placeholder="Park ref (e.g. K-1234)" maxlength="12" spellcheck="false" autocomplete="off" value="${ref || ''}">
+      <input type="text" class="multipark-ref-input" placeholder="Park ref (e.g. K-1234)" maxlength="20" spellcheck="false" autocomplete="off" value="${ref || ''}">
       <button type="button" class="multipark-remove-btn" title="Remove">&times;</button>
     </div>
     <span class="multipark-name">${name || ''}</span>

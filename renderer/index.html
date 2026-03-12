@@ -215,7 +215,7 @@
       <button id="activator-back" class="activator-back-btn" title="Switch to Hunter mode">&larr; Hunter</button>
       <div class="activator-toolbar-sep"></div>
       <div class="activator-park-input-wrap">
-        <input type="text" id="activator-park-ref" placeholder="Park ref (e.g. K-1234)" maxlength="12" spellcheck="false" autocomplete="off">
+        <input type="text" id="activator-park-ref" placeholder="Park ref (e.g. K-1234 or K-1234, K-5678)" maxlength="60" spellcheck="false" autocomplete="off">
         <div id="activator-park-dropdown" class="activator-dropdown hidden"></div>
       </div>
       <span id="activator-park-name" class="activator-park-name"></span>
@@ -254,7 +254,7 @@
       <span id="activator-cat-status" class="status disconnected" title="Disconnected" style="cursor:pointer;font-size:11px;margin-left:4px;">CAT</span>
     </div>
     <div id="activator-quick-log" class="activator-quick-log hidden">
-      <input type="text" id="activator-callsign" placeholder="Callsign(s)" maxlength="60" spellcheck="false" autocomplete="off" style="text-transform:uppercase;">
+      <input type="text" id="activator-callsign" placeholder="Callsign (or K3SBP, W1AW)" maxlength="60" spellcheck="false" autocomplete="off" style="text-transform:uppercase;">
       <div class="activator-rst-group rst-split-mode hidden">
         <label>S:</label>
         <div class="rst-digits" id="activator-rst-sent-digits">
@@ -902,6 +902,8 @@
       <span class="help-text" style="margin-left:12px;margin-bottom:6px;display:block;">Set to 0 to use the radio's default. Sent after every tune to keep your preferred filter.</span>
       <label class="checkbox-label"><input type="checkbox" id="set-enable-split"> Enable split mode</label>
       <span class="help-text" style="margin-left:12px;margin-bottom:6px;display:block;">Send split on/off with each tune command (VFO A = RX, VFO B = TX)</span>
+      <label class="checkbox-label"><input type="checkbox" id="set-enable-atu"> Auto-tune ATU on band change</label>
+      <span class="help-text" style="margin-left:12px;margin-bottom:6px;display:block;">Trigger the antenna tuner when tuning to a different band. Supports Yaesu, Kenwood, Elecraft, Hamlib rigctld, and FlexRadio.</span>
       <label class="checkbox-label"><input type="checkbox" id="set-tune-click"> Tune confirmation sound</label>
       <span class="help-text" style="margin-left:12px;margin-bottom:6px;display:block;">Play a click when the radio confirms it has changed frequency</span>
     </fieldset>
@@ -1099,6 +1101,65 @@
           <button type="button" id="net-cancel-btn">Cancel</button>
         </div>
       </div>
+      <div style="margin-top:8px;border-top:1px solid var(--border-primary);padding-top:8px;">
+        <label class="checkbox-label"><input type="checkbox" id="set-enable-directory"> Community HF Nets &amp; SWL Broadcast Directory</label>
+        <span class="help-text" style="margin-left:12px;display:block;">Browse and add nets from a community-managed directory.</span>
+        <div id="dir-controls" class="hidden" style="margin-top:6px;">
+          <button type="button" id="dir-browse-btn" class="settings-add-btn">Browse Directory</button>
+        </div>
+      </div>
+      <div id="dir-browser" class="hidden">
+        <div class="directory-header">
+          <div class="directory-tabs">
+            <button id="dir-tab-nets" class="directory-tab active" type="button">HF Nets</button>
+            <button id="dir-tab-swl" class="directory-tab" type="button">SWL Broadcasts</button>
+          </div>
+          <input type="text" id="dir-search" class="directory-search" placeholder="Search...">
+          <button id="dir-refresh-btn" type="button" class="directory-refresh" title="Refresh from Google Sheets">&#x21BB;</button>
+          <button id="dir-close-btn" type="button" class="directory-refresh" title="Close directory">&#x2715;</button>
+        </div>
+        <div id="dir-nets-container" class="directory-table-container">
+          <table class="directory-table">
+            <thead>
+              <tr>
+                <th class="dir-status-col"></th>
+                <th class="dir-name-col">Net Name</th>
+                <th class="dir-freq-col">Freq</th>
+                <th class="dir-mode-col">Mode</th>
+                <th class="dir-days-col">Days</th>
+                <th class="dir-time-col">Time (UTC)</th>
+                <th class="dir-dur-col">Dur</th>
+                <th class="dir-region-col">Region</th>
+                <th class="dir-notes-col">Notes</th>
+                <th class="dir-action-col"></th>
+              </tr>
+            </thead>
+            <tbody id="dir-nets-body"></tbody>
+          </table>
+        </div>
+        <div id="dir-swl-container" class="directory-table-container hidden">
+          <table class="directory-table">
+            <thead>
+              <tr>
+                <th class="dir-status-col"></th>
+                <th class="dir-name-col">Station</th>
+                <th class="dir-freq-col">Freq</th>
+                <th class="dir-mode-col">Mode</th>
+                <th class="dir-time-col">Start (UTC)</th>
+                <th class="dir-time-col">End (UTC)</th>
+                <th class="dir-lang-col">Lang</th>
+                <th class="dir-power-col">Power</th>
+                <th class="dir-region-col">Target</th>
+                <th class="dir-notes-col">Notes</th>
+              </tr>
+            </thead>
+            <tbody id="dir-swl-body"></tbody>
+          </table>
+        </div>
+        <div id="dir-placeholder" class="hidden">Loading directory data...</div>
+        <div class="dir-suggest-link">Want a net or SWL station added? <a href="#" id="dir-suggest-sheet">Leave a comment on the Google Sheet</a> and we'll review it.</div>
+      </div>
+      <div id="dir-hover-popup" class="dir-hover-popup hidden"></div>
     </fieldset>
 
     <!-- 8. Display (trimmed — bearing moved to Antenna, SmartSDR absorbed) -->
@@ -1354,8 +1415,8 @@
       </label>
       <label id="log-respot-comment-label" style="display:block;margin-top:6px;">
         Re-spot comment:
-        <input type="text" id="log-respot-comment" placeholder="Thks fer {rst}. 73s {mycallsign} via POTACAT">
-        <span class="help-text">Use {rst} to automatically fill in the signal report you sent</span>
+        <input type="text" id="log-respot-comment" placeholder="Thks {op_firstname} fer {rst}. 73s {mycallsign} via POTACAT">
+        <span class="help-text">{rst} signal report, {QTH} grid, {mycallsign} your call, {op_firstname} their name (OM if unknown)</span>
       </label>
     </div>
     <div class="dialog-buttons">
@@ -1379,6 +1440,7 @@
     <div id="respot-network-bar" class="respot-network-bar"></div>
     <label>Comment:
       <input type="text" id="respot-comment" placeholder="Re-spot comment">
+      <span class="help-text">{rst} {QTH} {mycallsign} {op_firstname}</span>
     </label>
     <div class="dialog-buttons">
       <button type="button" id="respot-cancel">Cancel</button>

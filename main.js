@@ -28,6 +28,7 @@ const { RemoteServer } = require('./lib/remote-server');
 const { fetchSpots: fetchWwffSpots } = require('./lib/wwff');
 const { fetchSpots: fetchLlotaSpots } = require('./lib/llota');
 const { postWwffRespot } = require('./lib/wwff-respot');
+const { fetchNets: fetchDirectoryNets, fetchSwl: fetchDirectorySwl } = require('./lib/directory');
 const { QrzClient } = require('./lib/qrz');
 const { callsignToProgram, fetchParksForProgram, loadParksCache, saveParksCache, isCacheStale, searchParks: searchParksDb, getPark: getParkDb, buildParksMap } = require('./lib/pota-parks-db');
 const { fetchDxCalExpeditions } = require('./lib/dxcal');
@@ -94,6 +95,9 @@ let expeditionCallsigns = new Set(); // active DX expeditions from Club Log + da
 let expeditionMeta = new Map(); // callsign → { entity, startDate, endDate, description }
 let activeEvents = [];                // events fetched from remote endpoint
 const EVENTS_CACHE_PATH = path.join(app.getPath('userData'), 'events-cache.json');
+let directoryNets = [];               // HF nets from community Google Sheet
+let directorySwl = [];                // SWL broadcasts from community Google Sheet
+const DIRECTORY_CACHE_PATH = path.join(app.getPath('userData'), 'directory-cache.json');
 let pskr = null;
 let pskrSpots = [];       // streaming PSKReporter FreeDV spots (FIFO, max 500)
 let pskrFlushTimer = null; // throttle timer for PSKReporter → renderer updates
@@ -3418,6 +3422,15 @@ function createWindow() {
     // Push cached events to renderer immediately + scan log for matches
     pushEventsToRenderer();
     scanLogForEvents();
+    // Load directory cache and fetch fresh data (only if enabled)
+    if (settings.enableDirectory) {
+      const dirCache = loadDirectoryCache();
+      directoryNets = dirCache.nets || [];
+      directorySwl = dirCache.swl || [];
+      pushDirectoryToRenderer();
+      fetchDirectory();
+    }
+    setInterval(() => { if (settings.enableDirectory) fetchDirectory(); }, 4 * 3600000);
     // Auto-reopen pop-out map if it was open when the app last closed
     if (settings.mapPopoutOpen) {
       ipcMain.emit('popout-map-open');
@@ -3662,6 +3675,32 @@ function pushEventsToRenderer() {
     progress: (eventStates[ev.id] && eventStates[ev.id].progress) || {},
   }));
   win.webContents.send('active-events', payload);
+}
+
+// --- Directory (HF Nets & SWL Broadcasts from Google Sheet) ---
+
+function loadDirectoryCache() {
+  try {
+    return JSON.parse(fs.readFileSync(DIRECTORY_CACHE_PATH, 'utf-8'));
+  } catch { /* fall through */ }
+  return { nets: [], swl: [], timestamp: 0 };
+}
+
+function saveDirectoryCache(data) {
+  try { fs.writeFileSync(DIRECTORY_CACHE_PATH, JSON.stringify(data)); } catch { /* ignore */ }
+}
+
+async function fetchDirectory() {
+  const results = await Promise.allSettled([fetchDirectoryNets(), fetchDirectorySwl()]);
+  if (results[0].status === 'fulfilled') directoryNets = results[0].value;
+  if (results[1].status === 'fulfilled') directorySwl = results[1].value;
+  saveDirectoryCache({ nets: directoryNets, swl: directorySwl, timestamp: Date.now() });
+  pushDirectoryToRenderer();
+}
+
+function pushDirectoryToRenderer() {
+  if (!win || win.isDestroyed()) return;
+  win.webContents.send('directory-data', { nets: directoryNets, swl: directorySwl });
 }
 
 function getEventProgress(eventId) {
@@ -4161,6 +4200,7 @@ function migrateRigSettings(s) {
 // --- Tune radio (shared by IPC and protocol handler) ---
 let _lastTuneFreq = 0;
 let _lastTuneTime = 0;
+let _lastTuneBand = null; // for ATU auto-tune on band change
 
 function tuneRadio(freqKhz, mode, brng, { clearXit } = {}) {
   let freqHz = Math.round(parseFloat(freqKhz) * 1000); // kHz → Hz
@@ -4207,6 +4247,20 @@ function tuneRadio(freqKhz, mode, brng, { clearXit } = {}) {
       } else if (shouldClearXit) {
         smartSdr.setSliceXit(sliceIndex, false);
       }
+      // ATU: auto-tune on band change (SmartSDR-only path)
+      if (settings.enableAtu) {
+        const freqMhzSdr = freqHz / 1e6;
+        const tuneBandSdr = freqToBand(freqMhzSdr);
+        if (tuneBandSdr && tuneBandSdr !== _lastTuneBand) {
+          _lastTuneBand = tuneBandSdr;
+          setTimeout(() => {
+            sendCatLog(`[ATU] Band changed to ${tuneBandSdr} → starting SmartSDR ATU tune`);
+            smartSdr.setAtu(true);
+          }, 1500);
+        } else if (!_lastTuneBand && tuneBandSdr) {
+          _lastTuneBand = tuneBandSdr;
+        }
+      }
     }
     return;
   }
@@ -4230,6 +4284,28 @@ function tuneRadio(freqKhz, mode, brng, { clearXit } = {}) {
       smartSdr.setSliceXit(sliceIndex, true, settings.cwXit);
     } else if (shouldClearXit) {
       smartSdr.setSliceXit(sliceIndex, false);
+    }
+  }
+
+  // ATU: auto-tune on band change
+  if (settings.enableAtu) {
+    const freqMhz = freqKhz / 1000;
+    const tuneBand = freqToBand(freqMhz);
+    if (tuneBand && tuneBand !== _lastTuneBand) {
+      _lastTuneBand = tuneBand;
+      // Delay ATU trigger to let the radio settle on the new frequency first
+      setTimeout(() => {
+        if (smartSdr && smartSdr.connected && settings.catTarget && settings.catTarget.type === 'tcp') {
+          sendCatLog(`[ATU] Band changed to ${tuneBand} → starting SmartSDR ATU tune`);
+          smartSdr.setAtu(true);
+        } else if (cat && cat.connected) {
+          sendCatLog(`[ATU] Band changed to ${tuneBand} → starting ATU tune`);
+          cat.startTune();
+        }
+      }, 1500);
+    } else if (!_lastTuneBand && tuneBand) {
+      // First tune — just record the band, don't trigger ATU
+      _lastTuneBand = tuneBand;
     }
   }
 }
@@ -4892,7 +4968,7 @@ app.whenReady().then(() => {
       return;
     }
     // Only allow known URLs
-    if (url.startsWith('https://www.qrz.com/') || url.startsWith('https://caseystanton.com/') || url.startsWith('https://github.com/Waffleslop/POTACAT/') || url.startsWith('https://hamlib.github.io/') || url.startsWith('https://github.com/Hamlib/') || url.startsWith('https://discord.gg/') || url.startsWith('https://potacat.com/') || url.startsWith('https://buymeacoffee.com/potacat')) {
+    if (url.startsWith('https://www.qrz.com/') || url.startsWith('https://caseystanton.com/') || url.startsWith('https://github.com/Waffleslop/POTACAT/') || url.startsWith('https://hamlib.github.io/') || url.startsWith('https://github.com/Hamlib/') || url.startsWith('https://discord.gg/') || url.startsWith('https://potacat.com/') || url.startsWith('https://buymeacoffee.com/potacat') || url.startsWith('https://docs.google.com/spreadsheets/')) {
       shell.openExternal(url);
     }
   });
@@ -4925,6 +5001,10 @@ app.whenReady().then(() => {
       console.error('[Echo CAT Audio] Error:', status.error);
     }
   });
+
+  // --- Directory IPC ---
+  ipcMain.on('fetch-directory', () => { fetchDirectory(); });
+  ipcMain.handle('get-directory', () => ({ nets: directoryNets, swl: directorySwl }));
 
   // --- Events IPC ---
   ipcMain.handle('get-active-events', () => {
