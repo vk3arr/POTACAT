@@ -2974,7 +2974,7 @@
         if (isHunt && isCq && !ft8QsoState) {
           const parts = upper.split(/\s+/);
           let callIdx = 1;
-          if (parts.length > 3 && parts[1].length <= 3 && !/[0-9]/.test(parts[1])) callIdx = 2;
+          if (parts.length > 3 && parts[1].length <= 4 && !/[0-9]/.test(parts[1])) callIdx = 2;
           const call = parts[callIdx] || '';
           const grid = parts[callIdx + 1] || '';
           if (call === ft8HuntCall) {
@@ -3028,7 +3028,7 @@
       const parts = text.split(/\s+/);
       let callIdx = 1;
       // Skip CQ modifiers (CQ DX, CQ NA, etc.)
-      if (parts.length > 3 && parts[1].length <= 3 && !/[0-9]/.test(parts[1])) callIdx = 2;
+      if (parts.length > 3 && parts[1].length <= 4 && !/[0-9]/.test(parts[1])) callIdx = 2;
       const call = parts[callIdx] || '';
       const grid = parts[callIdx + 1] || '';
       if (call) {

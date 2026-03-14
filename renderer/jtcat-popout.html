@@ -115,7 +115,7 @@
         <option value="FT2">FT2</option>
       </select>
     </div>
-    <span id="jp-tx-freq-label" style="font-size:12px;font-weight:bold;color:#ff4444;white-space:nowrap;">TX: 1500 Hz</span>
+    <span id="jp-tx-freq-label" style="font-size:12px;font-weight:bold;color:#ff4444;white-space:nowrap;cursor:pointer;" title="Click to set TX frequency">TX: 1500 Hz</span>
     <div class="jtcat-status">
       <span id="jp-cycle" class="jtcat-cycle">&mdash;</span>
       <span id="jp-countdown" class="jtcat-countdown">&mdash;</span>
@@ -149,7 +149,10 @@
   </div>
 
   <!-- Waterfall -->
-  <canvas id="jp-waterfall" class="jp-waterfall" width="600" height="80"></canvas>
+  <div style="position:relative;flex-shrink:0;">
+    <canvas id="jp-waterfall" class="jp-waterfall" width="600" height="80"></canvas>
+    <div id="jp-wf-tx-marker" style="position:absolute;top:0;bottom:0;width:1px;background:#ff2222;box-shadow:-1px 0 0 #000, 1px 0 0 #000;pointer-events:none;left:50%;"></div>
+  </div>
 
   <!-- QSO Tracker -->
   <div id="jp-qso-tracker" class="jp-qso-tracker hidden">
@@ -163,6 +166,13 @@
   <!-- Controls -->
   <div class="jp-controls">
     <button id="jp-cq" class="jp-btn">CQ</button>
+    <select id="jp-cq-modifier" style="font-size:11px;padding:3px 2px;border-radius:4px;border:1px solid var(--border-primary);background:var(--bg-tertiary);color:var(--text-primary);cursor:pointer;" title="CQ modifier">
+      <option value="">--</option>
+      <option value="POTA">POTA</option>
+      <option value="SOTA">SOTA</option>
+      <option value="QRP">QRP</option>
+      <option value="DX">DX</option>
+    </select>
     <button id="jp-enable-tx" class="jp-btn">Enable TX</button>
     <button id="jp-halt-tx" class="jp-btn jp-halt">Halt TX</button>
     <span id="jp-tx-msg" class="jp-tx-msg">&mdash;</span>

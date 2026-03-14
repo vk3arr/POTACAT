@@ -10757,7 +10757,7 @@ function jtcatMapPlotDecode(d) {
   if (text.startsWith('CQ ')) {
     // CQ [DX] CALL GRID — register the CQ caller
     var idx = 1;
-    if (parts.length > 3 && parts[1].length <= 3 && !/[0-9]/.test(parts[1])) idx = 2;
+    if (parts.length > 3 && parts[1].length <= 4 && !/[0-9]/.test(parts[1])) idx = 2;
     var call = parts[idx] || '';
     var grid = parts[idx + 1] || '';
     jtcatMapRegisterStation(call, grid);

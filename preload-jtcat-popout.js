@@ -25,7 +25,7 @@ contextBridge.exposeInMainWorld('api', {
   onJtcatQsoLogged: (cb) => ipcRenderer.on('jtcat-qso-logged', (_e, data) => cb(data)),
   // QSO commands (relayed to main renderer)
   jtcatReply: (data) => ipcRenderer.send('jtcat-popout-reply', data),
-  jtcatCallCq: () => ipcRenderer.send('jtcat-popout-call-cq'),
+  jtcatCallCq: (modifier) => ipcRenderer.send('jtcat-popout-call-cq', modifier || ''),
   jtcatCancelQso: () => ipcRenderer.send('jtcat-popout-cancel-qso'),
   // Map popout
   jtcatMapPopout: () => ipcRenderer.send('jtcat-map-popout'),

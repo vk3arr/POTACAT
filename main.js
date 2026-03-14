@@ -5399,12 +5399,13 @@ app.whenReady().then(() => {
     console.log('[JTCAT Popout] Reply to', data.call, '— phase:', phase, '— slot:', ft8Engine._txSlot, '—', txMsg);
   });
 
-  ipcMain.on('jtcat-popout-call-cq', async () => {
+  ipcMain.on('jtcat-popout-call-cq', async (_e, modifier) => {
     if (!ft8Engine) return;
     const myCall = (settings.myCallsign || '').toUpperCase();
     const myGrid = (settings.grid || '').toUpperCase().substring(0, 4);
     if (!myCall || !myGrid) return;
-    const txMsg = 'CQ ' + myCall + ' ' + myGrid;
+    const mod = (modifier || '').toUpperCase().replace(/[^A-Z]/g, '').substring(0, 4);
+    const txMsg = mod ? 'CQ ' + mod + ' ' + myCall + ' ' + myGrid : 'CQ ' + myCall + ' ' + myGrid;
     // TX on next available slot (opposite of last decoded)
     const nextSlot = ft8Engine._lastRxSlot === 'even' ? 'odd' : (ft8Engine._lastRxSlot === 'odd' ? 'even' : 'even');
     ft8Engine.setTxSlot(nextSlot);

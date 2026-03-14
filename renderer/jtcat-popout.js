@@ -241,7 +241,7 @@
     var parts = text.split(/\s+/);
     if (text.startsWith('CQ ')) {
       var idx = 1;
-      if (parts.length > 3 && parts[1].length <= 3 && !/[0-9]/.test(parts[1])) idx = 2;
+      if (parts.length > 3 && parts[1].length <= 4 && !/[0-9]/.test(parts[1])) idx = 2;
       var call = parts[idx] || '', grid = parts[idx + 1] || '';
       registerStation(call, grid);
       var stn = stations[call];
@@ -329,10 +329,13 @@
     var parts = text.split(/\s+/);
     if (text.startsWith('CQ ')) {
       var callIdx = 1;
-      if (parts.length > 3 && parts[1].length <= 3 && !/[0-9]/.test(parts[1])) callIdx = 2;
+      if (parts.length > 3 && parts[1].length <= 4 && !/[0-9]/.test(parts[1])) callIdx = 2;
       var call = parts[callIdx] || '';
       var grid = parts[callIdx + 1] || '';
       if (call) {
+        jpTxFreqHz = d.df || 1500;
+        txFreqLabel.textContent = 'TX: ' + jpTxFreqHz + ' Hz';
+        if (typeof updateTxMarker === 'function') updateTxMarker();
         console.log('[JTCAT popout] Reply to CQ:', call, grid, 'df:', d.df, 'slot:', d.slot);
         window.api.jtcatReply({ call: call, grid: grid, df: d.df || 1500, slot: d.slot });
       }
@@ -343,6 +346,9 @@
         var grid = /^[A-R]{2}[0-9]{2}$/i.test(payload) ? payload : '';
         var rptMatch = payload.match(/^R?([+-]\d{2})$/);
         var hasRR73 = payload === 'RR73' || payload === 'RRR' || payload === '73';
+        jpTxFreqHz = d.df || 1500;
+        txFreqLabel.textContent = 'TX: ' + jpTxFreqHz + ' Hz';
+        if (typeof updateTxMarker === 'function') updateTxMarker();
         console.log('[JTCAT popout] Pick up QSO with', fromCall, 'payload:', payload, 'df:', d.df);
         window.api.jtcatReply({
           call: fromCall, grid: grid, df: d.df || 1500, slot: d.slot,
@@ -355,6 +361,7 @@
         jpTxFreqHz = d.df || 1500;
         txFreqLabel.textContent = 'TX: ' + jpTxFreqHz + ' Hz';
         window.api.jtcatSetTxFreq(jpTxFreqHz);
+        if (typeof updateTxMarker === 'function') updateTxMarker();
       }
     }
   }
@@ -593,8 +600,10 @@
     cqFilterBtn.classList.toggle('active', cqFilter);
   });
 
+  var cqModifierSelect = document.getElementById('jp-cq-modifier');
   cqBtn.addEventListener('click', function() {
-    window.api.jtcatCallCq();
+    var mod = cqModifierSelect ? cqModifierSelect.value : '';
+    window.api.jtcatCallCq(mod);
   });
 
   enableTxBtn.addEventListener('click', function() {
@@ -674,6 +683,19 @@
   var jpWaterfall = document.getElementById('jp-waterfall');
   var jpWfCtx = jpWaterfall.getContext('2d');
 
+  function resizeWaterfall() {
+    var rect = jpWaterfall.getBoundingClientRect();
+    var dpr = window.devicePixelRatio || 1;
+    var newW = Math.round(rect.width * dpr);
+    var newH = Math.round(rect.height * dpr);
+    if (newW > 0 && newH > 0 && (jpWaterfall.width !== newW || jpWaterfall.height !== newH)) {
+      jpWaterfall.width = newW;
+      jpWaterfall.height = newH;
+    }
+  }
+  resizeWaterfall();
+  window.addEventListener('resize', resizeWaterfall);
+
   window.api.onJtcatSpectrum(function(data) {
     var bins = data.bins;
     if (!bins || !bins.length) return;
@@ -698,13 +720,38 @@
       lineData.data[i] = r; lineData.data[i + 1] = g; lineData.data[i + 2] = b; lineData.data[i + 3] = 255;
     }
     jpWfCtx.putImageData(lineData, 0, 0);
+  });
 
-    // TX frequency marker (red bar with black border)
-    var txX = Math.round(jpTxFreqHz / 3000 * w);
-    jpWfCtx.fillStyle = '#000';
-    jpWfCtx.fillRect(txX - 2, 0, 5, h);
-    jpWfCtx.fillStyle = '#ff2222';
-    jpWfCtx.fillRect(txX - 1, 0, 3, h);
+  // TX frequency marker overlay (CSS-positioned, doesn't scroll with waterfall)
+  var txMarkerEl = document.getElementById('jp-wf-tx-marker');
+  function updateTxMarker() {
+    var rect = jpWaterfall.getBoundingClientRect();
+    var pct = jpTxFreqHz / 3000 * 100;
+    txMarkerEl.style.left = pct + '%';
+  }
+  updateTxMarker();
+
+  // Click TX freq label to manually enter frequency
+  txFreqLabel.addEventListener('click', function() {
+    var input = document.createElement('input');
+    input.type = 'number'; input.min = '100'; input.max = '3000'; input.step = '10';
+    input.value = jpTxFreqHz;
+    input.style.cssText = 'width:60px;font-size:12px;font-weight:bold;color:#ff4444;background:var(--bg-primary);border:1px solid #ff4444;border-radius:3px;padding:1px 4px;font-family:monospace;';
+    txFreqLabel.textContent = 'TX: ';
+    txFreqLabel.appendChild(input);
+    input.focus(); input.select();
+    function apply() {
+      var hz = Math.round(parseInt(input.value, 10) / 10) * 10;
+      if (hz >= 100 && hz <= 3000) {
+        jpTxFreqHz = hz;
+        window.api.jtcatSetTxFreq(hz);
+        window.api.jtcatSetRxFreq(hz);
+        updateTxMarker();
+      }
+      txFreqLabel.textContent = 'TX: ' + jpTxFreqHz + ' Hz';
+    }
+    input.addEventListener('blur', apply);
+    input.addEventListener('keydown', function(e) { if (e.key === 'Enter') { e.preventDefault(); input.blur(); } if (e.key === 'Escape') { txFreqLabel.textContent = 'TX: ' + jpTxFreqHz + ' Hz'; } });
   });
 
   jpWaterfall.addEventListener('click', function(e) {
@@ -715,6 +762,7 @@
     txFreqLabel.textContent = 'TX: ' + hz + ' Hz';
     window.api.jtcatSetTxFreq(hz);
     window.api.jtcatSetRxFreq(hz);
+    updateTxMarker();
   });
 
   // --- Zoom (Ctrl+/Ctrl-) ---
