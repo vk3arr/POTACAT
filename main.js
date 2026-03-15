@@ -1486,8 +1486,12 @@ function advanceJtcatQso(q, results, setTxMsg, onDone) {
   const myCall = q.myCall;
 
   if (q.mode === 'cq') {
-    // Final courtesy TX: advance unconditionally — QSO already logged when entering this phase
+    // Final courtesy TX: wait one decode cycle so the RR73 has a chance to transmit
     if (q.phase === 'cq-rr73') {
+      if (!q._courtesySent) {
+        q._courtesySent = true;
+        return; // first decode in this phase — TX boundary hasn't fired yet
+      }
       q.phase = 'done';
       ft8Engine._txEnabled = false;
       ft8Engine.setTxMessage('');
@@ -1504,7 +1508,8 @@ function advanceJtcatQso(q, results, setTxMsg, onDone) {
       const m = (reply.text || '').toUpperCase().match(new RegExp(myCall.replace(/[/]/g, '\\/') + '\\s+([A-Z0-9/]+)\\s+([A-R]{2}\\d{2})', 'i'));
       if (!m) return;
       q.call = m[1]; q.grid = m[2];
-      const rpt = reply.db >= 0 ? '+' + String(reply.db).padStart(2, '0') : String(reply.db).padStart(3, '0');
+      const dbRounded = Math.round(reply.db);
+      const rpt = dbRounded >= 0 ? '+' + String(dbRounded).padStart(2, '0') : String(dbRounded).padStart(3, '0');
       q.sentReport = rpt;
       q.txMsg = q.call + ' ' + myCall + ' ' + rpt;
       q.phase = 'cq-report';
@@ -1529,8 +1534,12 @@ function advanceJtcatQso(q, results, setTxMsg, onDone) {
     // Reply mode
     const theirCall = q.call;
 
-    // Final courtesy TX: advance unconditionally — QSO already logged when entering this phase
+    // Final courtesy TX: wait one decode cycle so the 73 has a chance to transmit
     if (q.phase === '73') {
+      if (!q._courtesySent) {
+        q._courtesySent = true;
+        return; // first decode in this phase — TX boundary hasn't fired yet
+      }
       q.phase = 'done';
       ft8Engine._txEnabled = false;
       ft8Engine.setTxMessage('');
@@ -1567,7 +1576,8 @@ function advanceJtcatQso(q, results, setTxMsg, onDone) {
       const rptM = text.match(/[R]?([+-]\d{2})/);
       if (!rptM) return;
       q.report = rptM[1];
-      const ourRpt = resp.db >= 0 ? '+' + String(resp.db).padStart(2, '0') : String(resp.db).padStart(3, '0');
+      const dbRounded = Math.round(resp.db);
+      const ourRpt = dbRounded >= 0 ? '+' + String(dbRounded).padStart(2, '0') : String(dbRounded).padStart(3, '0');
       q.sentReport = ourRpt;
       if (text.indexOf('R' + rptM[1]) >= 0 || text.indexOf('R+') >= 0 || text.indexOf('R-') >= 0) {
         // They sent R+report — both reports exchanged. Send RR73, log now.
@@ -5375,12 +5385,17 @@ app.whenReady().then(() => {
     }
 
     if (phase === '73') {
-      // Send 73 and log
-      popoutJtcatQso = { mode: 'reply', call: data.call, grid: data.grid, phase, txMsg, report: null, sentReport: null, myCall, myGrid, txRetries: 0 };
+      // Send 73 courtesy — preserve reports from existing QSO if same call, don't re-log
+      const prev = popoutJtcatQso;
+      const sameCall = prev && prev.call && prev.call.toUpperCase() === data.call.toUpperCase();
+      popoutJtcatQso = { mode: 'reply', call: data.call, grid: data.grid || (sameCall ? prev.grid : ''), phase, txMsg,
+        report: sameCall ? prev.report : null,
+        sentReport: sameCall ? prev.sentReport : null,
+        myCall, myGrid, txRetries: 0 };
       ft8Engine._txEnabled = true;
       await ft8Engine.setTxMessage(txMsg);
       ft8Engine.tryImmediateTx();
-      jtcatAutoLog(popoutJtcatQso);
+      if (!sameCall) jtcatAutoLog(popoutJtcatQso);
     } else if (!popoutJtcatQso || popoutJtcatQso.phase !== phase) {
       // Only set up QSO if not already created above (report case)
       if (phase === 'reply') {

@@ -347,6 +347,8 @@
         txFreqLabel.textContent = 'TX: ' + jpTxFreqHz + ' Hz';
         if (typeof updateTxMarker === 'function') updateTxMarker();
         console.log('[JTCAT popout] Reply to CQ:', call, grid, 'df:', d.df, 'slot:', d.slot);
+        // Add the CQ message to My Activity as the start of the QSO thread
+        addToMyActivity(d);
         window.api.jtcatReply({ call: call, grid: grid, df: d.df || 1500, slot: d.slot });
       }
     } else if (parts.length >= 2) {
@@ -378,6 +380,30 @@
 
   // --- Decode rendering ---
   function esc(s) { return (s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+
+  // Add a single decode to My Activity pane (e.g. the CQ we clicked to start a QSO)
+  function addToMyActivity(d) {
+    var mEmpty = myActivity.querySelector('.jp-empty');
+    if (mEmpty) mEmpty.remove();
+    var now = new Date();
+    var time = String(now.getUTCHours()).padStart(2, '0') + ':' + String(now.getUTCMinutes()).padStart(2, '0') + ':' + String(now.getUTCSeconds()).padStart(2, '0');
+    var sep = document.createElement('div');
+    sep.className = 'jp-cycle-sep';
+    sep.textContent = time + ' UTC';
+    myActivity.appendChild(sep);
+    var text = d.text || '';
+    var dtStr = d.dt != null ? (d.dt >= 0 ? '+' : '') + d.dt.toFixed(1) : '';
+    var row = document.createElement('div');
+    row.className = 'jp-row jp-cq';
+    row.innerHTML =
+      '<span class="jp-db">' + (d.db >= 0 ? '+' : '') + d.db + '</span>' +
+      '<span class="jp-dt">' + dtStr + '</span>' +
+      '<span class="jp-df">' + d.df + '</span>' +
+      '<span class="jp-msg">' + esc(text) + '</span>';
+    row.addEventListener('dblclick', (function(decode) { return function() { onDecodeRowClick(decode); }; })(d));
+    myActivity.appendChild(row);
+    myActivity.scrollTop = myActivity.scrollHeight;
+  }
 
   function renderDecodes(data) {
     var results = data.results || [];
@@ -709,8 +735,14 @@
     var newW = Math.round(rect.width * dpr);
     var newH = Math.round(rect.height * dpr);
     if (newW > 0 && newH > 0 && (jpWaterfall.width !== newW || jpWaterfall.height !== newH)) {
+      // Save existing content before resize (setting width/height clears canvas)
+      var oldData = null;
+      try { oldData = jpWfCtx.getImageData(0, 0, jpWaterfall.width, jpWaterfall.height); } catch(e) {}
       jpWaterfall.width = newW;
       jpWaterfall.height = newH;
+      if (oldData) {
+        jpWfCtx.putImageData(oldData, 0, 0);
+      }
     }
   }
   resizeWaterfall();
