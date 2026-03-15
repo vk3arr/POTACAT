@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' https://*.tile.openstreetmap.org; connect-src 'self' https://*.tile.openstreetmap.org;">
+  <title>POTACAT — JTCAT</title>
+  <link rel="stylesheet" href="../node_modules/leaflet/dist/leaflet.css">
+  <link rel="stylesheet" href="styles.css">
+  <style>
+    html, body { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background: var(--bg-primary); color: var(--text-primary); font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
+    body { display: flex; flex-direction: column; }
+
+    /* Reuse JTCAT styles from styles.css via class names */
+    .jp-main { display: flex; flex: 1; min-height: 0; overflow: hidden; }
+    .jp-decode-pane { flex: 1; display: flex; flex-direction: column; min-width: 0; border-right: 1px solid var(--border-primary); }
+    .jp-decode-section { flex: 1; display: flex; flex-direction: column; min-height: 0; }
+    .jp-decode-section:first-child { border-bottom: 1px solid var(--border-primary); }
+    .jp-decode-header { padding: 4px 8px; font-size: 11px; font-weight: bold; color: var(--text-secondary); background: var(--bg-secondary); border-bottom: 1px solid var(--border-primary); display: flex; justify-content: space-between; align-items: center; flex-shrink: 0; }
+    .jp-decode-header span { font-weight: normal; color: var(--accent-blue); font-family: monospace; }
+    .jp-decode-list { flex: 1; overflow-y: auto; font-family: monospace; font-size: 12px; line-height: 1.6; padding: 2px 0; background: var(--bg-primary); }
+    .jp-map-pane { flex: 1; min-width: 0; display: flex; }
+    .jp-map-pane.hidden { display: none; }
+    .jp-map { flex: 1; width: 100%; height: 100%; }
+    .jp-empty { padding: 20px; text-align: center; color: var(--text-dim); }
+
+    /* Decode row styles */
+    .jp-cycle-sep { padding: 2px 8px; font-size: 10px; color: var(--text-dim, #666); border-top: 1px solid var(--border-primary); margin-top: 2px; }
+    .jp-row { display: flex; gap: 6px; padding: 1px 8px; cursor: pointer; align-items: baseline; }
+    .jp-row:hover { background: var(--bg-hover); }
+    .jp-row .jp-db { min-width: 28px; text-align: right; color: var(--text-secondary); }
+    .jp-row .jp-dt { min-width: 30px; text-align: right; color: var(--text-dim); font-size: 11px; }
+    .jp-row .jp-df { min-width: 36px; text-align: right; color: var(--text-dim); }
+    .jp-row .jp-msg { flex: 1; }
+    .jp-row.jp-cq .jp-msg { color: var(--accent-green, #4ecca3); font-weight: bold; }
+    .jp-row.jp-directed { background: rgba(233,69,96,0.15); }
+    .jp-row.jp-directed .jp-msg { color: #e94560; font-weight: bold; }
+    .jp-row.jp-tx { opacity: 0.7; }
+    .jp-row.jp-tx .jp-db { color: #e94560; }
+
+    /* Controls bar */
+    .jp-controls { padding: 6px 10px; background: var(--bg-secondary); border-top: 1px solid var(--border-primary); display: flex; gap: 8px; align-items: center; flex-shrink: 0; font-size: 12px; }
+    .jp-btn { padding: 4px 12px; border-radius: 4px; border: 1px solid var(--border-primary); background: var(--bg-tertiary); color: var(--text-primary); font-size: 12px; font-weight: 600; cursor: pointer; }
+    .jp-btn:hover { background: var(--bg-hover); }
+    .jp-btn.active { background: var(--accent-green, #4ecca3); color: #fff; border-color: var(--accent-green, #4ecca3); }
+    .jp-btn.jp-halt { background: #e94560; color: #fff; border-color: #e94560; }
+    .jp-tx-msg { flex: 1; font-family: monospace; color: var(--accent-blue); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .jp-status { font-family: monospace; color: var(--text-dim); font-size: 11px; }
+
+    /* QSO Tracker */
+    .jp-qso-tracker { padding: 6px 10px; background: var(--bg-tertiary, #1a1a2e); border-top: 1px solid var(--border-primary); flex-shrink: 0; }
+    .jp-qso-tracker.hidden { display: none; }
+    .jp-qso-header { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
+    .jp-qso-label { font-weight: 600; font-size: 13px; color: var(--text-primary); }
+    .jp-qso-cancel { margin-left: auto; background: none; border: 1px solid #e94560; color: #e94560; border-radius: 4px; padding: 2px 8px; font-size: 14px; cursor: pointer; line-height: 1; }
+    .jp-qso-cancel:hover { background: #e94560; color: #fff; }
+    .jp-qso-steps { display: flex; flex-wrap: wrap; gap: 2px; align-items: center; font-family: monospace; font-size: 11px; }
+    .jp-qso-step { display: flex; align-items: center; gap: 2px; padding: 3px 6px; border-radius: 3px; white-space: nowrap; background: var(--bg-secondary); color: var(--text-dim); border: 1px solid transparent; }
+    .jp-qso-step.step-done { color: var(--text-tertiary, #666); text-decoration: line-through; opacity: 0.6; }
+    .jp-qso-step.step-current { font-weight: bold; }
+    .jp-qso-step.step-current.step-tx { background: #e94560; color: #fff; border-color: #e94560; }
+    .jp-qso-step.step-current.step-tx.step-pulsing { animation: qso-step-pulse 1s ease-in-out infinite; }
+    .jp-qso-step.step-current.step-rx { background: var(--accent-green, #4ecca3); color: #000; border-color: var(--accent-green, #4ecca3); }
+    @keyframes qso-step-pulse { 0%,100% { opacity: 1; box-shadow: 0 0 4px #e94560; } 50% { opacity: 0.6; box-shadow: 0 0 12px #e94560; } }
+    .jp-qso-arrow { color: var(--text-dim); font-size: 8px; margin: 0 1px; }
+
+    /* QSO Logged notification */
+    .jp-qso-toast { position: fixed; bottom: 60px; left: 50%; transform: translateX(-50%); background: #d4edda; color: #1a1a1a; padding: 10px 20px; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; z-index: 9999; box-shadow: 0 4px 16px rgba(0,0,0,0.4); opacity: 0; pointer-events: none; transition: opacity 0.3s ease; }
+    .jp-qso-toast.visible { opacity: 1; pointer-events: auto; }
+    .jp-qso-toast .jp-toast-sub { font-weight: normal; font-size: 11px; opacity: 0.8; margin-top: 2px; }
+
+    /* Waterfall */
+    .jp-waterfall { width: 100%; height: 80px; image-rendering: pixelated; cursor: crosshair; flex-shrink: 0; border-top: 1px solid var(--border-primary); border-bottom: 1px solid var(--border-primary); display: block; }
+
+    /* Station popup */
+    .jp-station-popup .leaflet-popup-content-wrapper { background: var(--bg-secondary, #1a1a2e); color: var(--text-primary, #eee); border: 1px solid var(--border-primary, #333); border-radius: 6px; box-shadow: 0 4px 12px rgba(0,0,0,0.5); }
+    .jp-station-popup .leaflet-popup-tip { background: var(--bg-secondary, #1a1a2e); }
+    .jp-station-popup .leaflet-popup-content { margin: 8px 10px; }
+    .jp-popup-qso:hover { background: #3db88a !important; }
+
+    /* Animated arcs */
+    .jtcat-arc-forward { animation: jtcat-arc-flow 1.5s linear infinite; }
+    .jtcat-arc-reverse { animation: jtcat-arc-flow-rev 1.5s linear infinite; }
+    @keyframes jtcat-arc-flow { from { stroke-dashoffset: 28; } to { stroke-dashoffset: 0; } }
+    @keyframes jtcat-arc-flow-rev { from { stroke-dashoffset: 0; } to { stroke-dashoffset: 28; } }
+  </style>
+</head>
+<body>
+  <div class="titlebar">
+    <div class="titlebar-drag">
+      <span class="titlebar-title">POTACAT — JTCAT</span>
+    </div>
+    <div class="titlebar-controls">
+      <button class="titlebar-btn" id="tb-min" title="Minimize">&#x2014;</button>
+      <button class="titlebar-btn" id="tb-max" title="Maximize">&#x25A1;</button>
+      <button class="titlebar-btn titlebar-close" id="tb-close" title="Close">&#x2715;</button>
+    </div>
+  </div>
+
+  <!-- Toolbar -->
+  <div class="jtcat-toolbar">
+    <div class="jtcat-band-buttons">
+      <button class="jtcat-band-btn" data-band="80m" data-freq="3573">80</button>
+      <button class="jtcat-band-btn" data-band="40m" data-freq="7074">40</button>
+      <button class="jtcat-band-btn" data-band="30m" data-freq="10136">30</button>
+      <button class="jtcat-band-btn active" data-band="20m" data-freq="14074">20</button>
+      <button class="jtcat-band-btn" data-band="17m" data-freq="18100">17</button>
+      <button class="jtcat-band-btn" data-band="15m" data-freq="21074">15</button>
+      <button class="jtcat-band-btn" data-band="12m" data-freq="24915">12</button>
+      <button class="jtcat-band-btn" data-band="10m" data-freq="28074">10</button>
+      <button class="jtcat-band-btn" data-band="6m" data-freq="50313">6</button>
+    </div>
+    <div class="jtcat-mode-select">
+      <select id="jp-mode">
+        <option value="FT8">FT8</option>
+        <option value="FT4">FT4</option>
+        <option value="FT2">FT2</option>
+      </select>
+    </div>
+    <span id="jp-tx-freq-label" style="font-size:12px;font-weight:bold;color:#ff4444;white-space:nowrap;cursor:pointer;" title="Click to set TX frequency">TX: 1500 Hz</span>
+    <div class="jtcat-status">
+      <span id="jp-cycle" class="jtcat-cycle">&mdash;</span>
+      <span id="jp-countdown" class="jtcat-countdown">&mdash;</span>
+      <span id="jp-sync" class="jtcat-sync">Sync: &mdash;</span>
+    </div>
+    <div style="display:flex;gap:4px;margin-left:auto;">
+      <button id="jp-map-toggle" class="jtcat-filter-btn active" title="Toggle map">Map</button>
+      <button id="jp-map-popout" class="jtcat-filter-btn" title="Pop out map">&#x2197;</button>
+    </div>
+  </div>
+
+  <!-- Main: Decode + Map -->
+  <div class="jp-main">
+    <div class="jp-decode-pane">
+      <div class="jp-decode-section">
+        <div class="jp-decode-header">Band Activity <button id="jp-cq-filter" class="jtcat-filter-btn" title="CQ/73 only">CQ/73 Only</button></div>
+        <div id="jp-band-activity" class="jp-decode-list">
+          <div class="jp-empty">Waiting for decodes...</div>
+        </div>
+      </div>
+      <div class="jp-decode-section">
+        <div class="jp-decode-header">My Activity</div>
+        <div id="jp-my-activity" class="jp-decode-list">
+          <div class="jp-empty">No activity yet</div>
+        </div>
+      </div>
+    </div>
+    <div class="jp-map-pane">
+      <div id="jp-map" class="jp-map"></div>
+    </div>
+  </div>
+
+  <!-- Waterfall -->
+  <div style="position:relative;flex-shrink:0;">
+    <canvas id="jp-waterfall" class="jp-waterfall" width="600" height="80"></canvas>
+    <div id="jp-wf-tx-marker" style="position:absolute;top:0;bottom:0;width:1px;background:#ff2222;box-shadow:-1px 0 0 #000, 1px 0 0 #000;pointer-events:none;left:50%;"></div>
+  </div>
+
+  <!-- QSO Tracker -->
+  <div id="jp-qso-tracker" class="jp-qso-tracker hidden">
+    <div class="jp-qso-header">
+      <span id="jp-qso-label" class="jp-qso-label"></span>
+      <button id="jp-qso-cancel" class="jp-qso-cancel" title="Cancel QSO">&times;</button>
+    </div>
+    <div id="jp-qso-steps" class="jp-qso-steps"></div>
+  </div>
+
+  <!-- Controls -->
+  <div class="jp-controls">
+    <button id="jp-cq" class="jp-btn">CQ</button>
+    <select id="jp-cq-modifier" style="font-size:11px;padding:3px 2px;border-radius:4px;border:1px solid var(--border-primary);background:var(--bg-tertiary);color:var(--text-primary);cursor:pointer;" title="CQ modifier">
+      <option value="">--</option>
+      <option value="POTA">POTA</option>
+      <option value="SOTA">SOTA</option>
+      <option value="QRP">QRP</option>
+      <option value="DX">DX</option>
+    </select>
+    <button id="jp-enable-tx" class="jp-btn">Enable TX</button>
+    <button id="jp-halt-tx" class="jp-btn jp-halt">Halt TX</button>
+    <span id="jp-tx-msg" class="jp-tx-msg">&mdash;</span>
+    <span id="jp-rx-tx" class="jp-status">RX</span>
+  </div>
+
+  <div id="jp-qso-toast" class="jp-qso-toast"></div>
+
+  <script src="../node_modules/leaflet/dist/leaflet.js"></script>
+  <script src="jtcat-popout.js"></script>
+</body>
+</html>
