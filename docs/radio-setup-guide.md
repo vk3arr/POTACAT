@@ -96,20 +96,155 @@ Many USB serial interfaces (including built-in USB on QRP radios) use the DTR an
 
 #### QRPLabs QMX / QMX+
 
+The QMX and QMX+ are QRP CW/digital transceivers from QRPLabs that support Kenwood-compatible CAT control over USB. POTACAT connects via Serial CAT for frequency/mode polling and click-to-tune, and ECHOCAT adds remote CW keying from your phone.
+
+##### Firmware Requirements
+
+- **Minimum for CAT:** Any firmware with CAT support
+- **Minimum for CW text macros (KY command):** Firmware 1_00_021 or later
+- **Minimum for 3 USB serial ports:** Firmware 1_00_046 or later
+- **Recommended:** Latest firmware from [qrp-labs.com/qmx](https://qrp-labs.com/qmx)
+
+##### QMX Configuration
+
+Before connecting to POTACAT, configure these settings on the QMX. You can change them either through the QMX's on-screen menu (using the front panel buttons) or via the serial terminal.
+
+**Using the serial terminal:**
+
+1. Close POTACAT (or any other software using the COM port)
+2. Open a terminal program (PuTTY, Tera Term, or the Arduino Serial Monitor)
+3. Connect to the QMX's COM port at **38400 baud, 8N1** (8 data bits, no parity, 1 stop bit)
+4. Press **Enter** or the appropriate key to bring up the configuration menu
+5. Navigate to the settings below
+
+**Settings to change:**
+
+| Setting | Value | Why |
+|---------|-------|-----|
+| USB Serial Ports | **3** | Creates 3 COM ports: USB 1 (CAT), USB 2 (IQ audio), USB 3 (CI-V/keying). Required for some CW keying configurations. |
+
+After changing USB Serial Ports from 1 to 3, the QMX will appear as **three separate COM ports** in Device Manager. Note which COM port numbers are assigned — USB 1 (the lowest number) is the one you'll use for CAT control in POTACAT.
+
+> **Tip:** If you're not sure which port is USB 1, unplug and replug the QMX. The three ports that appear in Device Manager are USB 1, 2, and 3 in ascending COM port number order.
+
+After changing settings, **power cycle the QMX** (unplug USB and replug) for the new USB configuration to take effect.
+
+##### POTACAT Settings
+
 | Setting | Value |
 |---------|-------|
 | Connection type | Serial CAT (Kenwood) |
-| Baud rate | 38400 (check your QMX firmware settings) |
-| Disable DTR/RTS | Yes (required — QMX uses DTR for PTT) |
+| COM port | USB 1 (the lowest of the 3 COM ports) |
+| Baud rate | 38400 |
+| Disable DTR/RTS | **Yes** (required) |
 
-**Important notes:**
-- Do **not** use the "Other Rig (Hamlib)" option — Hamlib's protocol checks are too strict for the QMX's Kenwood implementation and will fail with protocol errors.
-- If the QMX stops responding to CAT commands or the Test Connection shows diagnostic text instead of a frequency, **power cycle the radio**. Terminal programs like PuTTY can put the QMX into a debug/terminal mode that persists until reboot.
-- The QMX creates a single USB serial port. Make sure no other software (PuTTY, WSJT-X, N3FJP, etc.) has the port open — only one program can use a COM port at a time.
+**Important:**
+- Do **not** use "Other Rig (Hamlib)" — Hamlib's protocol validation is too strict for the QMX's Kenwood implementation and will fail with protocol errors.
+- **Disable DTR/RTS must be checked.** The QMX interprets DTR as a control signal. If DTR is asserted on connect, it can interfere with normal operation.
+- Only one program can use a COM port at a time. Close PuTTY, WSJT-X, or any other software using the port before connecting POTACAT.
+
+##### ECHOCAT Remote CW
+
+ECHOCAT lets you send CW from your phone (via TinyMIDI paddle or on-screen) through the QMX. There are two methods, each with different trade-offs:
+
+**Method 1: CW Text Macros (KY command)**
+
+Best for programmed messages — CQ calls, exchanges, 73. The QMX's internal keyer plays the text at a fixed speed with clean shaping. You don't control the timing of individual elements.
+
+- Works with firmware 1_00_021+
+- ECHOCAT sends `KY` commands to the QMX, which keys internally
+- WPM is set via `KS` command (synced from ECHOCAT's WPM slider)
+- Supports prosigns: `[` = BT, `_` = AR, `>` = SK, `=` = KN
+- 5 programmable macro buttons on the phone (default: CQ, 599, 73, AGN, TU)
+- Free-text input field for custom CW text
+
+No additional settings needed — text macros work over the same CAT connection.
+
+**Method 2: Paddle CW (TX;/RX; keying)**
+
+Best for real-time paddle operation — preserves your sending rhythm from the TinyMIDI or on-screen paddle. The phone sends paddle contact events over WebSocket, POTACAT's IambicKeyer generates the timing, and `TX;`/`RX;` commands key the QMX's transmitter.
+
+- Phone sends raw paddle state → desktop IambicKeyer → `TX;`/`RX;` CAT commands
+- Preserves your fist/timing (unlike KY text which uses the radio's fixed speed)
+- No QMX sidetone — the phone generates local sidetone via Web Audio API
+- CW element timing is precise: CAT polling automatically pauses during keying to prevent interleaved commands from disrupting timing
+- 2-second watchdog catches lost WebSocket events (prevents stuck keys)
+
+To enable:
+1. In POTACAT Settings, under **ECHOCAT**, check **Enable CW Keyer**
+2. Connect to ECHOCAT from your phone
+3. Open the CW panel and tap the paddle or use a TinyMIDI keyboard paddle
+
+**Method 3: Hardware DTR Keying (external USB-serial adapter)**
+
+Best for absolute timing precision. A dedicated USB-to-serial adapter (FTDI, CH340, or CP2102) wired to the QMX's key jack via a simple transistor circuit toggles DTR for key-down/key-up.
+
+> **Note:** DTR keying through the QMX's own USB ports does **not** work on Windows. The Windows CDC-ACM driver (`usbser.sys`) accepts DTR toggle calls without error but does not send the USB control transfer to the device. This is a Windows driver limitation, not a QMX bug. DTR keying may work on Linux where the `cdc_acm` kernel driver properly handles DTR. The external adapter approach below bypasses this limitation entirely.
+
+**What you need:**
+- A USB-to-serial adapter (FTDI FT232, CH340, or CP2102 — any will work)
+- An NPN transistor (2N2222, 2N3904, or similar)
+- A 1kΩ resistor
+- A 3.5mm mono or stereo plug that fits your QMX key jack
+
+**Wiring:**
+
+```
+USB-Serial Adapter                 QMX Key Jack (3.5mm)
+
+DTR pin ──── 1kΩ ──── Base
+                      2N2222
+GND pin ──────────── Emitter ──── Sleeve (GND)
+                      Collector ── Tip (Key)
+```
+
+When DTR goes high, the transistor saturates and shorts Tip to Sleeve — same as closing a straight key.
+
+**POTACAT Settings:**
+1. In Settings, set **CW Key Port** to the COM port of your USB-serial adapter (not the QMX's COM port)
+2. The adapter's baud rate doesn't matter — only the DTR line is used
+3. ECHOCAT's IambicKeyer drives DTR high/low with element timing
+4. DTR is forced low on disconnect, phone disconnect, and app exit (safety)
+
+This method works alongside TX;/RX; and KY macros — all three fire simultaneously when CW is keyed, so you can use the hardware adapter for keying while KY handles text macros.
+
+##### Combining Methods
+
+In practice, you'll likely use both:
+- **Paddle CW (TX;/RX;)** or **Hardware DTR** for real-time paddle sending during QSOs
+- **CW text macros (KY)** for programmed messages (CQ calls, contest exchanges)
+
+Both are always available in ECHOCAT's CW panel — macro buttons send KY commands, paddle input drives TX;/RX; (and DTR if configured).
+
+##### Troubleshooting
+
+**QMX stops responding to CAT / shows diagnostic text:**
+Power cycle the QMX. Terminal programs (PuTTY, etc.) can put it into a debug/terminal mode that persists until reboot. Always close terminal programs before connecting POTACAT.
+
+**"Access denied" when connecting:**
+Another program has the COM port open. Only one program can use a COM port at a time.
+
+**QMX transmits unexpectedly on connect:**
+Make sure **Disable DTR/RTS on connect** is checked in POTACAT's rig settings.
+
+**CW text macros don't send:**
+Check that your firmware is 1_00_021 or later. The `KY` command was added in that version.
+
+**Paddle CW sends but QMX CW decoder shows wrong characters:**
+Make sure the WPM setting in ECHOCAT matches approximately what you're sending. The QMX decoder has a narrow speed tracking range.
+
+**Paddle gets "stuck" (continuous dit-dah-dit-dah):**
+This happens when a WebSocket keyup event is lost. ECHOCAT has a 2-second watchdog that automatically releases stuck paddles. If it persists, tap the **Stop** button in the CW panel or disconnect and reconnect.
+
+##### Known Limitations
+
+- **No QMX sidetone for TX;/RX; keying** — the QMX only generates sidetone for its own internal keyer (paddle/straight key jack, KY command). TX;/RX; keying toggles the transmitter directly. Use the phone's local sidetone instead (generated by ECHOCAT via Web Audio API with near-zero latency).
+- **QDX does not support CW** — the QDX is a digital-only transceiver. CW features (KY, TX;/RX; keying) are QMX/QMX+ only.
+- **DTR keying via QMX's own USB does not work on Windows** — see the Hardware DTR Keying section above for the workaround.
 
 #### QRPLabs QDX
 
-Same settings as the QMX. The QDX also uses Kenwood CAT protocol over USB serial.
+Same CAT settings as the QMX (Serial CAT Kenwood, 38400 baud, Disable DTR/RTS). The QDX supports Kenwood CAT protocol for frequency and mode control but does **not** support CW — it is a digital-mode-only transceiver. ECHOCAT CW features are not available with the QDX.
 
 #### Kenwood Radios (TS-480, TS-590, TS-2000, etc.)
 

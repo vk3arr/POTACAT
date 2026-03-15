@@ -1624,6 +1624,56 @@ dialog input, dialog select {
   color: #81d4fa;
 }
 
+/* Pi access easter egg */
+.pi-access {
+  position: absolute;
+  bottom: 0;
+  right: 0;
+  font-size: 11px;
+  color: var(--text-dimmer);
+  cursor: default;
+  user-select: none;
+  opacity: 0.4;
+  line-height: 1;
+  padding: 2px 4px;
+}
+
+.pi-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 99999;
+  background: #000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  animation: pi-fade-in 0.15s ease-out;
+}
+
+.pi-overlay.hidden {
+  display: none !important;
+}
+
+.pi-overlay-text {
+  font-family: 'Courier New', Courier, monospace;
+  font-size: 28px;
+  font-weight: bold;
+  color: #00ff41;
+  letter-spacing: 4px;
+  text-shadow: 0 0 10px #00ff41, 0 0 30px #00ff4180;
+  animation: pi-text-glow 0.8s ease-in-out;
+}
+
+@keyframes pi-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes pi-text-glow {
+  0% { opacity: 0; transform: scale(0.95); }
+  50% { opacity: 1; transform: scale(1.02); }
+  100% { opacity: 1; transform: scale(1); }
+}
+
 /* Radio config fieldset */
 .radio-config {
   border: 1px solid var(--border-secondary);
@@ -3179,6 +3229,114 @@ dialog input, dialog select {
   border-radius: 3px;
   padding: 2px 4px;
   font-size: 12px;
+}
+
+/* Rig Control Popover — rig panel dropdown from status bar */
+.rig-popover {
+  position: absolute;
+  top: 100%;
+  z-index: 10001;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-secondary);
+  border-radius: 4px;
+  padding: 8px 12px;
+  margin-top: 4px;
+  min-width: 280px;
+  box-shadow: 0 4px 16px var(--shadow-heavy);
+}
+
+.rig-popover.hidden {
+  display: none !important;
+}
+
+.rig-popover-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 0;
+  font-size: 12px;
+  color: var(--text-primary);
+}
+
+.rig-popover-row label {
+  min-width: 60px;
+  color: var(--text-secondary);
+  font-size: 11px;
+  margin: 0;
+  flex-shrink: 0;
+}
+
+.rig-popover-row span {
+  font-size: 11px;
+  min-width: 32px;
+  color: var(--text-tertiary);
+  text-align: right;
+}
+
+.rig-popover-buttons {
+  gap: 4px;
+  flex-wrap: wrap;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--border-primary);
+  margin-bottom: 2px;
+}
+
+.rig-btn {
+  background: var(--bg-primary);
+  border: 1px solid var(--border-primary);
+  color: var(--text-primary);
+  border-radius: 3px;
+  padding: 3px 8px;
+  font-size: 11px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.rig-btn:hover {
+  background: var(--border-primary);
+}
+
+.rig-btn.active {
+  background: #2a6e4e;
+  color: #fff;
+  border-color: #2a6e4e;
+}
+
+.rig-btn-danger {
+  color: #e94560;
+}
+
+.rig-btn-danger:hover {
+  background: #e94560;
+  color: #fff;
+  border-color: #e94560;
+}
+
+.rig-filter-presets {
+  display: flex;
+  gap: 3px;
+  flex-wrap: wrap;
+}
+
+.rig-filter-presets button {
+  background: var(--bg-primary);
+  border: 1px solid var(--border-primary);
+  color: var(--text-primary);
+  border-radius: 3px;
+  padding: 2px 6px;
+  font-size: 10px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.rig-filter-presets button:hover {
+  background: var(--border-primary);
+}
+
+.rig-filter-presets button.active {
+  background: #2a6e4e;
+  color: #fff;
+  border-color: #2a6e4e;
 }
 
 /* Hotkeys dialog */

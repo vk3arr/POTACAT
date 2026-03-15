@@ -152,7 +152,7 @@
         <button id="popout-map-btn" class="view-btn popout-btn" title="Pop-out map window">&#x2197;</button>
         <button id="view-rbn-btn" class="view-btn hidden" title="Reverse Beacon Network">RBN</button>
         <button id="cluster-terminal-btn" class="view-btn hidden" title="DX Cluster Terminal">Terminal</button>
-        <button id="view-jtcat-btn" class="view-btn" title="JTCAT — FT8/FT4 Digital Modes">JTCAT</button>
+        <button id="view-jtcat-btn" class="view-btn hidden" title="JTCAT — FT8/FT4 Digital Modes">JTCAT</button>
       </div>
     </div>
     <div class="status-bar">
@@ -171,6 +171,29 @@
         <div class="cw-popover-row">
           <label>WPM</label>
           <input type="number" id="cw-popover-wpm" min="5" max="50" value="20" style="width:50px;">
+        </div>
+      </div>
+      <span id="rig-panel-btn" class="status hidden" style="background:#2a6e4e;color:#fff;cursor:pointer;">Rig</span>
+      <div id="rig-popover" class="rig-popover hidden">
+        <div class="rig-popover-row rig-popover-buttons">
+          <button id="rig-atu-btn" class="rig-btn" title="Start ATU tune cycle">ATU Tune</button>
+          <button id="rig-nb-btn" class="rig-btn" title="Toggle Noise Blanker">NB</button>
+          <button id="rig-power-on-btn" class="rig-btn" title="Power On">Power On</button>
+          <button id="rig-power-off-btn" class="rig-btn rig-btn-danger" title="Power Off">Power Off</button>
+        </div>
+        <div class="rig-popover-row">
+          <label>RF Gain</label>
+          <input type="range" id="rig-rfgain" min="0" max="100" value="50" style="flex:1;accent-color:#4ecca3;">
+          <span id="rig-rfgain-label">50</span>
+        </div>
+        <div class="rig-popover-row">
+          <label>TX Power</label>
+          <input type="range" id="rig-txpower" min="0" max="100" value="100" style="flex:1;accent-color:#4ecca3;">
+          <span id="rig-txpower-label">100W</span>
+        </div>
+        <div class="rig-popover-row">
+          <label>Filter</label>
+          <div id="rig-filter-presets" class="rig-filter-presets"></div>
         </div>
       </div>
       <span id="sfi-status" class="status solar-pill hidden">SFI —</span>
@@ -785,6 +808,39 @@
             <span id="serialcat-test-result" style="font-size:12px;"></span>
           </div>
         </div>
+        <label class="radio-label"><input type="radio" name="radio-type" value="icom"> Icom (CI-V)</label>
+        <div id="icom-config" class="radio-sub hidden">
+          <span class="help-text" style="font-size:12px;">Direct CI-V binary protocol over USB. For IC-7300, IC-705, and other Icom radios with USB port.</span>
+          <label>Radio Model:
+            <select id="set-icom-model">
+              <option value="0x94">IC-7300</option>
+              <option value="0xB6">IC-7300 MK II</option>
+              <option value="0xA4">IC-705</option>
+              <option value="0x7C">IC-7610</option>
+              <option value="0x70">IC-7100</option>
+              <option value="0x76">IC-7600</option>
+              <option value="0x8E">IC-7851</option>
+            </select>
+          </label>
+          <label>Serial Port:
+            <div style="display:flex;gap:6px;margin-top:4px;">
+              <select id="set-icom-port" style="flex:1;"></select>
+              <input type="text" id="set-icom-port-manual" placeholder="or type COM port" style="width:120px;">
+            </div>
+          </label>
+          <label>Baud Rate:
+            <select id="set-icom-baud">
+              <option value="9600">9600</option>
+              <option value="19200">19200</option>
+              <option value="115200" selected>115200</option>
+            </select>
+          </label>
+          <div style="margin-top:6px;display:flex;align-items:center;gap:8px;">
+            <button type="button" id="icom-test-btn">Test Connection</button>
+            <span id="icom-test-result" style="font-size:12px;"></span>
+          </div>
+          <span class="help-text" style="margin-top:6px;display:block;">For CW paddle keying via ECHOCAT, set your radio menu: SET > Connectors > USB SEND/Keying > USB Keying (CW) = DTR</span>
+        </div>
         <label class="radio-label"><input type="radio" name="radio-type" value="hamlib"> Other Rig (Hamlib)</label>
         <div id="hamlib-config" class="radio-sub hidden">
           <label>Rig Model:
@@ -1338,13 +1394,15 @@
             <input type="number" id="set-remote-ptt-timeout" min="30" max="600" value="180" style="width:70px;">
           </label>
         </div>
-        <label class="checkbox-label" style="margin-top:8px;"><input type="checkbox" id="set-remote-cw-enabled"> Enable Remote CW Keyer</label>
-        <span class="help-text" style="margin-left:12px;display:block;">Send CW via paddle from phone (TinyMIDI / keyboard). Requires SmartSDR (FlexRadio) or CW Key Port.</span>
-        <div style="margin-top:6px;margin-left:12px;">
-          <label>CW Key Port (DTR keying):
-            <select id="set-cw-key-port" style="width:220px;"><option value="">(none)</option></select>
-          </label>
-          <span class="help-text" style="display:block;">External USB-serial adapter for DTR CW keying (QMX, etc). Separate from CAT port.</span>
+        <div class="pi-gated hidden">
+          <label class="checkbox-label" style="margin-top:8px;"><input type="checkbox" id="set-remote-cw-enabled"> Enable Remote CW Keyer</label>
+          <span class="help-text" style="margin-left:12px;display:block;">Send CW via paddle from phone (TinyMIDI / keyboard). Requires SmartSDR (FlexRadio) or CW Key Port.</span>
+          <div style="margin-top:6px;margin-left:12px;">
+            <label>CW Key Port (DTR keying):
+              <select id="set-cw-key-port" style="width:220px;"><option value="">(none)</option></select>
+            </label>
+            <span class="help-text" style="display:block;">External USB-serial adapter for DTR CW keying (QMX, etc). Separate from CAT port.</span>
+          </div>
         </div>
         <div id="remote-url-display" style="margin-top:8px;font-family:monospace;font-size:12px;"></div>
         <span class="help-text">To use ECHOCAT securely outside your home network, install <a href="https://tailscale.com" target="_blank" style="color:#4fc3f7;">Tailscale</a> on both your shack computer and phone. Audio, tuning, and PTT are all encrypted over the Tailscale VPN.</span>
@@ -1384,8 +1442,8 @@
       <button id="settings-save">Save</button>
       <button id="settings-cancel">Cancel</button>
     </div>
-    <div class="settings-footer">
-      <div class="settings-version">v1.0.11 &mdash; <a href="#" id="bio-link">Casey Stanton, K3SBP</a></div>
+    <div class="settings-footer" style="position:relative;">
+      <div class="settings-version">v1.0.12 &mdash; <a href="#" id="bio-link">Casey Stanton, K3SBP</a></div>
       <div class="settings-coffee"><a href="#" id="coffee-link">Buy Me a Coffee</a></div>
       <div class="settings-links">
         <a href="#" id="discord-link">Discord</a>
@@ -1398,8 +1456,14 @@
         <span class="footer-dot">&middot;</span>
         <a href="#" id="check-update-link">Check for Updates</a>
       </div>
+      <span id="pi-access" class="pi-access">&pi;</span>
     </div>
   </dialog>
+
+  <!-- Pi Access overlay (The Net easter egg) -->
+  <div id="pi-overlay" class="pi-overlay hidden">
+    <div class="pi-overlay-text">ACCESS: AUTHORIZED</div>
+  </div>
 
   <!-- Log QSO dialog -->
   <dialog id="log-dialog">
@@ -1700,6 +1764,34 @@
           </label>
           <label class="checkbox-label" style="margin-top:6px;display:flex;align-items:center;gap:6px;">
             <input type="checkbox" id="welcome-serialcat-dtr-off"> Disable DTR/RTS
+          </label>
+        </div>
+        <label class="radio-label"><input type="radio" name="welcome-radio-type" value="icom"> Icom (CI-V)</label>
+        <div id="welcome-icom-config" class="radio-sub hidden">
+          <span class="help-text" style="font-size:12px;">Direct CI-V binary protocol over USB. For IC-7300, IC-705, and other Icom radios.</span>
+          <label>Radio Model:
+            <select id="welcome-icom-model">
+              <option value="0x94">IC-7300</option>
+              <option value="0xB6">IC-7300 MK II</option>
+              <option value="0xA4">IC-705</option>
+              <option value="0x7C">IC-7610</option>
+              <option value="0x70">IC-7100</option>
+              <option value="0x76">IC-7600</option>
+              <option value="0x8E">IC-7851</option>
+            </select>
+          </label>
+          <label>Serial Port:
+            <div style="display:flex;gap:6px;margin-top:4px;">
+              <select id="welcome-icom-port" style="flex:1;"></select>
+              <input type="text" id="welcome-icom-port-manual" placeholder="or type COM port" style="width:120px;">
+            </div>
+          </label>
+          <label>Baud Rate:
+            <select id="welcome-icom-baud">
+              <option value="9600">9600</option>
+              <option value="19200">19200</option>
+              <option value="115200" selected>115200</option>
+            </select>
           </label>
         </div>
         <label class="radio-label"><input type="radio" name="welcome-radio-type" value="hamlib"> Other Rig (Hamlib)</label>

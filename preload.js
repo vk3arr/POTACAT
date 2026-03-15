@@ -14,6 +14,7 @@ contextBridge.exposeInMainWorld('api', {
   listRigs: () => ipcRenderer.invoke('list-rigs'),
   testHamlib: (config) => ipcRenderer.invoke('test-hamlib', config),
   testSerialCat: (config) => ipcRenderer.invoke('test-serial-cat', config),
+  testIcomCiv: (config) => ipcRenderer.invoke('test-icom-civ', config),
   connectCat: (target) => ipcRenderer.send('connect-cat', target),
   onCatFrequency: (cb) => ipcRenderer.on('cat-frequency', (_e, hz) => cb(hz)),
   onCatMode: (cb) => ipcRenderer.on('cat-mode', (_e, mode) => cb(mode)),
@@ -148,6 +149,9 @@ contextBridge.exposeInMainWorld('api', {
   previewClubCsv: (csvPath) => ipcRenderer.invoke('preview-club-csv', csvPath),
   hashClubPasswords: (csvPath) => ipcRenderer.invoke('hash-club-passwords', csvPath),
   createClubCsv: (rigNames) => ipcRenderer.invoke('create-club-csv', rigNames),
+  // Rig Control Panel
+  rigControl: (data) => ipcRenderer.invoke('rig-control', data),
+  onRigState: (cb) => ipcRenderer.on('rig-state', (_e, state) => cb(state)),
   onRemoteTxState: (cb) => ipcRenderer.on('remote-tx-state', (_e, state) => cb(state)),
   onRemoteStatus: (cb) => ipcRenderer.on('remote-status', (_e, s) => cb(s)),
   onReloadPrefs: (cb) => ipcRenderer.on('reload-prefs', () => cb()),

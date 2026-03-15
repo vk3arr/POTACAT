@@ -9,7 +9,7 @@ const { execFile, spawn } = require('child_process');
 const { fetchSpots: fetchPotaSpots } = require('./lib/pota');
 const { fetchSpots: fetchSotaSpots, fetchSummitCoordsBatch, summitCache, loadAssociations, getAssociationName, SotaUploader } = require('./lib/sota');
 const sotaUploader = new SotaUploader();
-const { CatClient, RigctldClient, listSerialPorts } = require('./lib/cat');
+const { CatClient, RigctldClient, CivClient, listSerialPorts } = require('./lib/cat');
 const { gridToLatLon, haversineDistanceMiles, bearing } = require('./lib/grid');
 const { freqToBand } = require('./lib/bands');
 const { loadCtyDat, resolveCallsign, getAllEntities } = require('./lib/cty');
@@ -143,6 +143,7 @@ function findNearestPreset(presets, currentWidth) {
 function detectRigType() {
   const target = settings.catTarget;
   if (!target) return 'unknown';
+  if (target.type === 'icom') return 'icom';
   if (target.type === 'rigctld' || target.type === 'rigctldnet') return 'rigctld';
   if (target.type === 'tcp') return 'flex'; // TCP CAT ports 5002-5005 are always FlexRadio
   if (target.type === 'serial') {
@@ -154,11 +155,12 @@ function detectRigType() {
 
 function getRigCapabilities(rigType) {
   switch (rigType) {
-    case 'flex':    return { nb: true, atu: true, vfo: false, filter: true, filterType: 'arbitrary', rfgain: true, txpower: true };
-    case 'yaesu':   return { nb: true, atu: false, vfo: true, filter: true, filterType: 'indexed', rfgain: false, txpower: false };
-    case 'kenwood': return { nb: true, atu: false, vfo: true, filter: true, filterType: 'direct', rfgain: false, txpower: false };
-    case 'rigctld': return { nb: true, atu: false, vfo: true, filter: true, filterType: 'passband', rfgain: true, txpower: true };
-    default:        return { nb: false, atu: false, vfo: false, filter: false, filterType: 'none', rfgain: false, txpower: false };
+    case 'flex':    return { nb: true, atu: true, vfo: false, filter: true, filterType: 'arbitrary', rfgain: true, txpower: true, power: false };
+    case 'yaesu':   return { nb: true, atu: true, vfo: true, filter: true, filterType: 'indexed', rfgain: true, txpower: true, power: true };
+    case 'kenwood': return { nb: true, atu: true, vfo: true, filter: true, filterType: 'direct', rfgain: true, txpower: true, power: true };
+    case 'icom':    return { nb: false, atu: false, vfo: false, filter: false, filterType: 'none', rfgain: false, txpower: false, power: true };
+    case 'rigctld': return { nb: true, atu: true, vfo: true, filter: true, filterType: 'passband', rfgain: true, txpower: true, power: true };
+    default:        return { nb: false, atu: false, vfo: false, filter: false, filterType: 'none', rfgain: false, txpower: false, power: false };
   }
 }
 
@@ -365,6 +367,8 @@ function sendCatStatus(s) {
       win.webContents.send('remote-tx-state', false);
     }
   }
+  // Broadcast rig state on connect/disconnect so the Rig panel updates
+  broadcastRigState();
 }
 
 function sendCatFrequency(hz) {
@@ -380,11 +384,13 @@ function sendCatFrequency(hz) {
 function sendCatMode(mode) {
   if (win && !win.isDestroyed()) win.webContents.send('cat-mode', mode);
   _currentMode = mode;
-  broadcastRemoteRadioStatus();
+  broadcastRigState();
 }
 
 function sendCatPower(watts) {
   if (win && !win.isDestroyed()) win.webContents.send('cat-power', watts);
+  _currentTxPower = watts;
+  broadcastRigState();
 }
 
 function sendCatNb(on) {
@@ -392,6 +398,23 @@ function sendCatNb(on) {
   // responses which can fight with the API state (stale/different values)
   if (detectRigType() === 'flex' && smartSdr && smartSdr.connected) return;
   _currentNbState = on;
+  broadcastRigState();
+}
+
+// Broadcast full rig control state to renderer and ECHOCAT
+function broadcastRigState() {
+  const rigType = detectRigType();
+  const caps = getRigCapabilities(rigType);
+  const state = {
+    nb: _currentNbState,
+    rfGain: _currentRfGain,
+    txPower: _currentTxPower,
+    filterWidth: _currentFilterWidth,
+    atuActive: _currentAtuState,
+    mode: _currentMode,
+    capabilities: caps,
+  };
+  if (win && !win.isDestroyed()) win.webContents.send('rig-state', state);
   broadcastRemoteRadioStatus();
 }
 
@@ -464,6 +487,16 @@ async function connectCat() {
     const port = target.port || 4532;
     sendCatLog(`Connecting to remote rigctld on ${host}:${port}`);
     cat.connect({ type: 'rigctldnet', host, port });
+  } else if (target && target.type === 'icom') {
+    // Icom CI-V binary protocol over USB serial
+    cat = new CivClient();
+    cat._debug = true;
+    cat.on('log', sendCatLog);
+    cat.on('status', sendCatStatus);
+    cat.on('frequency', sendCatFrequency);
+    cat.on('mode', sendCatMode);
+    cat.on('power', sendCatPower);
+    cat.connect(target);
   } else {
     cat = new CatClient();
     cat._debug = true;
@@ -604,6 +637,11 @@ function connectCluster() {
   // Migrate legacy settings if needed
   if (!settings.clusterNodes) {
     migrateClusterNodes();
+  }
+  // Force piAccess off on upgrade — users must re-authorize via π
+  if (settings.piAccess !== false && settings.piAccess !== true) {
+    settings.piAccess = false;
+    saveSettings(settings);
   }
 
   const enabledNodes = (settings.clusterNodes || []).filter(n => n.enabled).slice(0, 3);
@@ -1460,8 +1498,8 @@ function needsSmartSdr() {
   // WSJT-X is active with a Flex, ECHOCAT remote needs rig controls,
   // or CW XIT offset is configured (XIT is applied via SmartSDR slice commands)
   if (settings.smartSdrSpots) return true;
-  if (settings.enableCwKeyer) return true;
-  if (settings.enableRemote && settings.remoteCwEnabled) return true;
+  if (settings.piAccess && settings.enableCwKeyer) return true;
+  if (settings.piAccess && settings.enableRemote && settings.remoteCwEnabled) return true;
   if (settings.enableWsjtx && settings.catTarget && settings.catTarget.type === 'tcp') return true;
   if (settings.enableRemote && settings.catTarget && settings.catTarget.type === 'tcp') return true;
   if (settings.cwXit && settings.catTarget && settings.catTarget.type === 'tcp') return true;
@@ -1483,7 +1521,7 @@ function connectSmartSdr() {
   }
   smartSdr.setPersistentId(settings.smartSdrClientId);
   // Tell SmartSDR whether CW keyer needs GUI auth
-  smartSdr.setNeedsCw(!!(settings.enableCwKeyer || (settings.enableRemote && settings.remoteCwEnabled)));
+  smartSdr.setNeedsCw(!!(settings.piAccess && (settings.enableCwKeyer || (settings.enableRemote && settings.remoteCwEnabled))));
   // Bind to GUI client for ECHOCAT rig controls (ATU, etc.)
   smartSdr.setNeedsBind(!!settings.enableRemote);
   // Log CW auth results
@@ -1678,7 +1716,7 @@ function updateRemoteSettings() {
     maxAgeMin: settings.maxAgeMin != null ? settings.maxAgeMin : 5,
     distUnit: settings.distUnit || 'mi',
     cwXit: settings.cwXit || 0,
-    remoteCwEnabled: !!settings.remoteCwEnabled,
+    remoteCwEnabled: !!(settings.piAccess && settings.remoteCwEnabled),
     remoteCwMacros: settings.remoteCwMacros || null,
   });
 }
@@ -1686,6 +1724,7 @@ function updateRemoteSettings() {
 // --- CW Key Port (dedicated DTR keying via external USB-serial adapter) ---
 function connectCwKeyPort() {
   disconnectCwKeyPort();
+  if (!settings.piAccess) return; // CW key port requires pi access
   const portPath = settings.cwKeyPort;
   if (!portPath) return;
   const { SerialPort } = require('serialport');
@@ -1781,8 +1820,12 @@ function connectRemote() {
       win.webContents.send('remote-status', { connected: false });
     }
     // CW safety: ensure PTT released on disconnect (keyer.stop() is handled in RemoteServer)
-    if (smartSdr && smartSdr.connected) {
+    if (detectRigType() === 'flex' && smartSdr && smartSdr.connected) {
       smartSdr.cwPttRelease();
+    }
+    // Icom: force DTR low (CW key up) on disconnect
+    if (detectRigType() === 'icom' && cat && cat.connected) {
+      cat.setCwKeyDtr(false);
     }
     // Force CW key port DTR low (key up) on disconnect
     if (cwKeyPort && cwKeyPort.isOpen) {
@@ -1792,15 +1835,37 @@ function connectRemote() {
   });
 
   // CW keyer output: route IambicKeyer key events to radio
+  let _cwPollResumeTimer = null;
   remoteServer.setCwKeyerOutput(({ down }) => {
-    // FlexRadio via SmartSDR TCP API — cw key 0|1 with client_handle
-    if (smartSdr && smartSdr.connected) {
+    // FlexRadio via SmartSDR TCP API — only when Flex is the active CAT rig
+    if (detectRigType() === 'flex' && smartSdr && smartSdr.connected) {
       if (down) {
-        smartSdr.cwPttOn(); // activate CW PTT (with holdoff auto-release)
+        smartSdr.cwPttOn();
       }
       smartSdr.cwKey(down);
     }
-    // Dedicated CW Key Port — DTR keying via external USB-serial adapter
+    // Serial CAT keying — TX;/RX; for Kenwood/Yaesu, DTR for Icom
+    const rigType = detectRigType();
+    if (cat && cat.connected && (rigType === 'kenwood' || rigType === 'yaesu' || rigType === 'icom')) {
+      // Pause polling so commands don't interleave with CW keying
+      if (down) {
+        if (_cwPollResumeTimer) { clearTimeout(_cwPollResumeTimer); _cwPollResumeTimer = null; }
+        cat.pausePolling();
+      } else {
+        // Resume polling 1.5s after last key-up
+        if (_cwPollResumeTimer) clearTimeout(_cwPollResumeTimer);
+        _cwPollResumeTimer = setTimeout(() => {
+          _cwPollResumeTimer = null;
+          cat.resumePolling();
+        }, 1500);
+      }
+      if (rigType === 'icom') {
+        cat.setCwKeyDtr(down);
+      } else {
+        cat.setCwKeyTxRx(down);
+      }
+    }
+    // Dedicated CW Key Port — DTR keying via external USB-serial adapter (FTDI/CH340/CP2102)
     if (cwKeyPort && cwKeyPort.isOpen) {
       cwKeyPort.set({ dtr: !!down }, (err) => {
         if (err) console.log(`[CW Key Port] DTR error: ${err.message}`);
@@ -1810,7 +1875,7 @@ function connectRemote() {
 
   // CW config changes from phone (WPM)
   remoteServer.on('cw-config', ({ wpm }) => {
-    if (smartSdr && smartSdr.connected) {
+    if (detectRigType() === 'flex' && smartSdr && smartSdr.connected) {
       smartSdr.setCwSpeed(wpm);
     }
     // Also set KS on serial CAT (QMX etc.)
@@ -1936,7 +2001,7 @@ function connectRemote() {
       cat.setFilterWidth(width);
     }
     _currentFilterWidth = width;
-    broadcastRemoteRadioStatus();
+    broadcastRigState();
   }
 
   remoteServer.on('set-filter', ({ width }) => {
@@ -1961,7 +2026,7 @@ function connectRemote() {
       cat.setNb(on);
     }
     _currentNbState = on;
-    broadcastRemoteRadioStatus();
+    broadcastRigState();
     console.log('[Echo CAT] NB:', on ? 'ON' : 'OFF');
   });
 
@@ -1970,7 +2035,7 @@ function connectRemote() {
       smartSdr.setAtu(on);
     }
     _currentAtuState = on;
-    broadcastRemoteRadioStatus();
+    broadcastRigState();
     console.log('[Echo CAT] ATU:', on ? 'ON' : 'OFF');
   });
 
@@ -1981,7 +2046,7 @@ function connectRemote() {
       cat.setVfo(vfo);
     }
     _currentVfo = vfo;
-    broadcastRemoteRadioStatus();
+    broadcastRigState();
     console.log('[Echo CAT] VFO:', vfo);
   });
 
@@ -1996,7 +2061,7 @@ function connectRemote() {
       cat.setVfo(newVfo);
     }
     _currentVfo = newVfo;
-    broadcastRemoteRadioStatus();
+    broadcastRigState();
     console.log('[Echo CAT] Swap VFO →', newVfo);
   });
 
@@ -2009,7 +2074,7 @@ function connectRemote() {
       cat.setRfGain(value / 100);
     }
     _currentRfGain = value;
-    broadcastRemoteRadioStatus();
+    broadcastRigState();
     console.log('[Echo CAT] RF Gain →', value);
   });
 
@@ -2020,8 +2085,73 @@ function connectRemote() {
       cat.setTxPower(value / 100);
     }
     _currentTxPower = value;
-    broadcastRemoteRadioStatus();
+    broadcastRigState();
     console.log('[Echo CAT] TX Power →', value);
+  });
+
+  // Unified rig-control from ECHOCAT phone (same dispatch as desktop IPC)
+  remoteServer.on('rig-control', (data) => {
+    if (!data || !data.action) return;
+    const rigType = detectRigType();
+    switch (data.action) {
+      case 'set-nb': {
+        const on = !!data.value;
+        if (flexSdr()) smartSdr.setSliceNb(0, on);
+        else if (cat && cat.connected) cat.setNb(on);
+        _currentNbState = on;
+        broadcastRigState();
+        break;
+      }
+      case 'atu-tune':
+        if (flexSdr()) smartSdr.setAtu(true);
+        else if (cat && cat.connected) cat.startTune();
+        _currentAtuState = true;
+        broadcastRigState();
+        break;
+      case 'power-on':
+        if (cat && cat.connected && rigType !== 'flex') cat.setPowerState(true);
+        break;
+      case 'power-off':
+        if (cat && cat.connected && rigType !== 'flex') cat.setPowerState(false);
+        break;
+      case 'set-rf-gain': {
+        const value = Number(data.value) || 0;
+        if (flexSdr()) smartSdr.setRfGain(0, (value * 0.3) - 10);
+        else if (cat && cat.connected) {
+          if (rigType === 'rigctld') cat.setRfGain(value / 100);
+          else cat.setRfGain(value);
+        }
+        _currentRfGain = value;
+        broadcastRigState();
+        break;
+      }
+      case 'set-tx-power': {
+        const value = Number(data.value) || 0;
+        if (flexSdr()) smartSdr.setTxPower(value);
+        else if (cat && cat.connected) {
+          if (rigType === 'rigctld') cat.setTxPower(value / 100);
+          else cat.setTxPower(value);
+        }
+        _currentTxPower = value;
+        broadcastRigState();
+        break;
+      }
+      case 'set-filter-width': {
+        const width = Number(data.value) || 0;
+        if (width <= 0) break;
+        if (flexSdr()) {
+          const m = (_currentMode || '').toUpperCase();
+          let lo, hi;
+          if (m === 'CW') { lo = Math.max(0, 600 - Math.round(width / 2)); hi = 600 + Math.round(width / 2); }
+          else { lo = 100; hi = 100 + width; }
+          smartSdr.setSliceFilter(0, lo, hi);
+        } else if (cat && cat.connected) cat.setFilterWidth(width);
+        _currentFilterWidth = width;
+        broadcastRigState();
+        break;
+      }
+    }
+    console.log('[Echo CAT] rig-control:', data.action, data.value != null ? data.value : '');
   });
 
   remoteServer.on('set-activator-park', async ({ parkRef, activationType, activationName: actName, sig }) => {
@@ -5289,6 +5419,104 @@ app.whenReady().then(() => {
     tuneRadio(frequency, mode, bearing);
   });
 
+  // --- Rig Control Panel IPC ---
+  ipcMain.handle('rig-control', (_e, data) => {
+    if (!data || !data.action) return;
+    const flexSdr = () => smartSdr && smartSdr.connected;
+    const rigType = detectRigType();
+    switch (data.action) {
+      case 'set-nb': {
+        const on = !!data.value;
+        if (flexSdr()) {
+          smartSdr.setSliceNb(0, on);
+        } else if (cat && cat.connected) {
+          cat.setNb(on);
+        }
+        _currentNbState = on;
+        broadcastRigState();
+        break;
+      }
+      case 'atu-tune': {
+        if (flexSdr()) {
+          smartSdr.setAtu(true); // 'atu start'
+        } else if (cat && cat.connected) {
+          cat.startTune();
+        }
+        _currentAtuState = true;
+        broadcastRigState();
+        break;
+      }
+      case 'power-on': {
+        if (cat && cat.connected && rigType !== 'flex') {
+          cat.setPowerState(true);
+        }
+        break;
+      }
+      case 'power-off': {
+        if (cat && cat.connected && rigType !== 'flex') {
+          cat.setPowerState(false);
+        }
+        break;
+      }
+      case 'set-rf-gain': {
+        const value = Number(data.value) || 0;
+        if (flexSdr()) {
+          const dB = (value * 0.3) - 10;
+          smartSdr.setRfGain(0, dB);
+        } else if (cat && cat.connected) {
+          if (rigType === 'rigctld') {
+            cat.setRfGain(value / 100);
+          } else {
+            cat.setRfGain(value);
+          }
+        }
+        _currentRfGain = value;
+        broadcastRigState();
+        break;
+      }
+      case 'set-tx-power': {
+        const value = Number(data.value) || 0;
+        if (flexSdr()) {
+          smartSdr.setTxPower(value);
+        } else if (cat && cat.connected) {
+          if (rigType === 'rigctld') {
+            cat.setTxPower(value / 100);
+          } else {
+            cat.setTxPower(value);
+          }
+        }
+        _currentTxPower = value;
+        broadcastRigState();
+        break;
+      }
+      case 'set-filter-width': {
+        const width = Number(data.value) || 0;
+        if (width <= 0) break;
+        if (flexSdr()) {
+          const m = (_currentMode || '').toUpperCase();
+          let lo, hi;
+          if (m === 'CW') {
+            lo = Math.max(0, 600 - Math.round(width / 2));
+            hi = 600 + Math.round(width / 2);
+          } else {
+            lo = 100;
+            hi = 100 + width;
+          }
+          smartSdr.setSliceFilter(0, lo, hi);
+        } else if (cat && cat.connected) {
+          cat.setFilterWidth(width);
+        }
+        _currentFilterWidth = width;
+        broadcastRigState();
+        break;
+      }
+      case 'get-state': {
+        broadcastRigState();
+        break;
+      }
+    }
+  });
+
   ipcMain.on('refresh', () => { markUserActive(); refreshSpots(); });
 
   ipcMain.handle('get-settings', () => ({ ...settings, appVersion: require('./package.json').version }));
@@ -5887,6 +6115,98 @@ app.whenReady().then(() => {
     });
   });
 
+  ipcMain.handle('test-icom-civ', async (_e, config) => {
+    const { portPath, baudRate, civAddress } = config;
+    const { SerialPort } = require('serialport');
+
+    // Temporarily disconnect live CAT to release the serial port
+    if (cat) cat.disconnect();
+
+    await new Promise((r) => setTimeout(r, 500));
+
+    return new Promise((resolve) => {
+      let settled = false;
+      const radioAddr = civAddress || 0x94;
+      const ctrlAddr = 0xE0;
+      let buf = Buffer.alloc(0);
+
+      const port = new SerialPort({
+        path: portPath,
+        baudRate: baudRate || 115200,
+        dataBits: 8, stopBits: 1, parity: 'none',
+        autoOpen: false, rtscts: false, hupcl: false,
+      });
+
+      const timeout = setTimeout(() => {
+        if (!settled) {
+          settled = true;
+          try { port.close(); } catch {}
+          resolve({ success: false, error: 'No CI-V response. Check baud rate, COM port, and CI-V address.' });
+        }
+      }, 5000);
+
+      port.on('open', () => {
+        try { port.set({ dtr: false, rts: false }); } catch {}
+        // Send CI-V frequency read command (0x03)
+        const cmd = Buffer.from([0xFE, 0xFE, radioAddr, ctrlAddr, 0x03, 0xFD]);
+        setTimeout(() => port.write(cmd), 100);
+        setTimeout(() => { if (!settled) port.write(cmd); }, 1500);
+      });
+
+      port.on('data', (chunk) => {
+        buf = Buffer.concat([buf, chunk]);
+        // Scan for complete CI-V frames
+        while (buf.length >= 6) {
+          let preamble = -1;
+          for (let i = 0; i < buf.length - 1; i++) {
+            if (buf[i] === 0xFE && buf[i + 1] === 0xFE) { preamble = i; break; }
+          }
+          if (preamble === -1) { buf = Buffer.alloc(0); return; }
+          if (preamble > 0) buf = buf.slice(preamble);
+          const fdIdx = buf.indexOf(0xFD, 4);
+          if (fdIdx === -1) return;
+          const body = buf.slice(2, fdIdx);
+          buf = buf.slice(fdIdx + 1);
+          if (body.length < 3) continue;
+          const toAddr = body[0];
+          const cmd = body[2];
+          const payload = body.slice(3);
+          // Only process frames addressed to us
+          if (toAddr !== ctrlAddr) continue;
+          // Frequency response (cmd 0x03)
+          if (cmd === 0x03 && payload.length >= 5 && !settled) {
+            let hz = 0, mult = 1;
+            for (let i = 0; i < 5; i++) {
+              hz += ((payload[i] >> 4) * 10 + (payload[i] & 0x0F)) * mult;
+              mult *= 100;
+            }
+            settled = true;
+            clearTimeout(timeout);
+            try { port.close(); } catch {}
+            resolve({ success: true, frequency: (hz / 1e6).toFixed(6) });
+            return;
+          }
+          // NAK — wrong address or unsupported command
+          if (cmd === 0xFA && !settled) {
+            settled = true;
+            clearTimeout(timeout);
+            try { port.close(); } catch {}
+            resolve({ success: false, error: 'Radio rejected command (NAK). Check CI-V address matches your radio model.' });
+            return;
+          }
+        }
+      });
+
+      port.on('error', (err) => {
+        if (!settled) { settled = true; clearTimeout(timeout); resolve({ success: false, error: err.message }); }
+      });
+
+      port.open((err) => {
+        if (err && !settled) { settled = true; clearTimeout(timeout); resolve({ success: false, error: err.message }); }
+      });
+    });
+  });
+
   ipcMain.handle('test-hamlib', async (_e, config) => {
     const { rigId, serialPort, baudRate, dtrOff } = config;
     let testProc = null;
@@ -6422,16 +6742,20 @@ app.whenReady().then(() => {
   // --- CW Keyer IPC ---
   // Paddle events go through IambicKeyer, which generates key events → xmit 1/0
   ipcMain.on('cw-paddle-dit', (_e, pressed) => {
+    if (!settings.piAccess) return;
     if (keyer) keyer.paddleDit(pressed);
   });
   ipcMain.on('cw-paddle-dah', (_e, pressed) => {
+    if (!settings.piAccess) return;
     if (keyer) keyer.paddleDah(pressed);
   });
   ipcMain.on('cw-set-wpm', (_e, wpm) => {
+    if (!settings.piAccess) return;
     if (keyer) keyer.setWpm(wpm);
     if (smartSdr && smartSdr.connected) smartSdr.setCwSpeed(wpm);
   });
   ipcMain.on('cw-stop', () => {
+    if (!settings.piAccess) return;
     if (keyer) keyer.stop();
     if (smartSdr && smartSdr.connected) smartSdr.cwStop();
   });

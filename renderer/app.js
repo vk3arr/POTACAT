@@ -194,6 +194,7 @@ const hamlibConfig = document.getElementById('hamlib-config');
 const flexConfig = document.getElementById('flex-config');
 const tcpcatConfig = document.getElementById('tcpcat-config');
 const serialcatConfig = document.getElementById('serialcat-config');
+const icomConfig = document.getElementById('icom-config');
 const rigctldnetConfig = document.getElementById('rigctldnet-config');
 const setRigctldnetHost = document.getElementById('set-rigctldnet-host');
 const setRigctldnetPort = document.getElementById('set-rigctldnet-port');
@@ -637,6 +638,7 @@ catStatusEl.addEventListener('click', (e) => {
   if (catPopoverOpen) {
     closeCatPopover();
   } else {
+    if (typeof closeRigPopover === 'function') closeRigPopover();
     openCatPopover();
   }
 });
@@ -735,8 +737,8 @@ async function loadPrefs() {
   activeRigName = activeRig ? activeRig.name : '';
   enableWsjtx = settings.enableWsjtx === true;
   updateWsjtxStatusVisibility();
-  // CW Keyer: init MIDI + connect saved device on load
-  if (settings.enableCwKeyer) {
+  // CW Keyer: init MIDI + connect saved device on load (requires pi access)
+  if (settings.piAccess && settings.enableCwKeyer) {
     cwKeyerStatusEl.classList.remove('hidden');
     populateMidiDevices().then(() => {
       if (settings.cwMidiDevice) connectMidiDevice(settings.cwMidiDevice);
@@ -745,6 +747,8 @@ async function loadPrefs() {
   updateRbnButton();
   clusterTerminalBtn.classList.toggle('hidden', !settings.enableClusterTerminal);
   updateDxccButton();
+  // Pi access — JTCAT button visibility on startup
+  if (jtcatBtn) jtcatBtn.classList.toggle('hidden', !settings.piAccess);
   // Activator mode restore
   if (settings.appMode === 'activator') {
     appMode = 'activator';
@@ -862,10 +866,14 @@ function updateRadioSubPanels() {
   flexConfig.classList.toggle('hidden', type !== 'flex');
   tcpcatConfig.classList.toggle('hidden', type !== 'tcpcat');
   serialcatConfig.classList.toggle('hidden', type !== 'serialcat');
+  icomConfig.classList.toggle('hidden', type !== 'icom');
   hamlibConfig.classList.toggle('hidden', type !== 'hamlib');
   rigctldnetConfig.classList.toggle('hidden', type !== 'rigctldnet');
   if (type === 'serialcat' && !serialcatPortsLoaded) {
     loadSerialcatPorts();
+  }
+  if (type === 'icom' && !icomPortsLoaded) {
+    loadIcomPorts();
   }
   if (type === 'hamlib' && !hamlibFieldsLoaded) {
     hamlibFieldsLoaded = true;
@@ -893,6 +901,10 @@ async function populateRadioSection(currentTarget) {
     setRadioType('serialcat');
     serialcatPortsLoaded = true;
     await loadSerialcatPorts(currentTarget);
+  } else if (currentTarget.type === 'icom') {
+    setRadioType('icom');
+    icomPortsLoaded = true;
+    await loadIcomPorts(currentTarget);
   } else if (currentTarget.type === 'rigctld') {
     setRadioType('hamlib');
     hamlibFieldsLoaded = true;
@@ -965,6 +977,44 @@ async function populateHamlibFields(savedTarget) {
   setRigctldPort.value = (savedTarget && savedTarget.rigctldPort) || 4532;
 }
 
+let icomPortsLoaded = false;
+
+function getEffectiveIcomPort() {
+  const manual = document.getElementById('set-icom-port-manual').value.trim();
+  return manual || document.getElementById('set-icom-port').value;
+}
+
+async function loadIcomPorts(savedTarget) {
+  const ports = await window.api.listPorts();
+  const portSelect = document.getElementById('set-icom-port');
+  const portManual = document.getElementById('set-icom-port-manual');
+  portSelect.innerHTML = '';
+  portManual.value = '';
+  const detectedPaths = new Set();
+  for (const p of ports) {
+    detectedPaths.add(p.path);
+    const opt = document.createElement('option');
+    opt.value = p.path;
+    opt.textContent = `${p.path} — ${p.friendlyName}`;
+    if (savedTarget && savedTarget.path === p.path) opt.selected = true;
+    portSelect.appendChild(opt);
+  }
+  if (savedTarget && savedTarget.path && !detectedPaths.has(savedTarget.path)) {
+    portManual.value = savedTarget.path;
+  }
+  if (savedTarget && savedTarget.baudRate) {
+    document.getElementById('set-icom-baud').value = String(savedTarget.baudRate);
+  }
+  if (savedTarget && savedTarget.civAddress) {
+    const modelSelect = document.getElementById('set-icom-model');
+    const addrHex = '0x' + savedTarget.civAddress.toString(16).toUpperCase();
+    for (const opt of modelSelect.options) {
+      if (opt.value.toUpperCase() === addrHex.toUpperCase()) { opt.selected = true; break; }
+    }
+  }
+  icomPortsLoaded = true;
+}
+
 let serialcatPortsLoaded = false;
 
 async function loadSerialcatPorts(savedTarget) {
@@ -1009,6 +1059,9 @@ function describeRigTarget(target) {
   }
   if (target.type === 'serial') {
     return `Serial CAT on ${target.path || '?'} @ ${target.baudRate || 9600}`;
+  }
+  if (target.type === 'icom') {
+    return `${target.civModel || 'Icom'} CI-V on ${target.path || '?'} @ ${target.baudRate || 115200}`;
   }
   if (target.type === 'rigctld') {
     const comPort = target.serialPort || '?';
@@ -1114,6 +1167,15 @@ function buildCatTargetFromForm() {
       baudRate: parseInt(setSerialcatBaud.value, 10) || 9600,
       dtrOff: setSerialcatDtrOff.checked,
     };
+  } else if (radioType === 'icom') {
+    const modelSelect = document.getElementById('set-icom-model');
+    return {
+      type: 'icom',
+      path: getEffectiveIcomPort(),
+      baudRate: parseInt(document.getElementById('set-icom-baud').value, 10) || 115200,
+      civAddress: parseInt(modelSelect.value, 16),
+      civModel: modelSelect.options[modelSelect.selectedIndex].text,
+    };
   } else if (radioType === 'hamlib') {
     return {
       type: 'rigctld',
@@ -1138,6 +1200,7 @@ async function openRigEditor(mode, rigId) {
   editingRigId = rigId || null;
   hamlibFieldsLoaded = false;
   serialcatPortsLoaded = false;
+  icomPortsLoaded = false;
 
   if (mode === 'edit') {
     rigEditorTitle.textContent = 'Edit Rig';
@@ -2712,6 +2775,41 @@ serialcatTestBtn.addEventListener('click', async () => {
   }
 });
 
+
+// Icom CI-V test connection
+document.getElementById('icom-test-btn').addEventListener('click', async () => {
+  const portPath = getEffectiveIcomPort();
+  const baudRate = parseInt(document.getElementById('set-icom-baud').value, 10);
+  const civAddress = parseInt(document.getElementById('set-icom-model').value, 16);
+  const resultEl = document.getElementById('icom-test-result');
+  const btn = document.getElementById('icom-test-btn');
+
+  if (!portPath) {
+    resultEl.textContent = 'Select a serial port first';
+    resultEl.className = 'hamlib-test-fail';
+    return;
+  }
+
+  btn.disabled = true;
+  resultEl.textContent = 'Testing...';
+  resultEl.className = '';
+
+  try {
+    const result = await window.api.testIcomCiv({ portPath, baudRate, civAddress });
+    if (result.success) {
+      resultEl.textContent = `Connected! Freq: ${result.frequency} MHz`;
+      resultEl.className = 'hamlib-test-success';
+    } else {
+      resultEl.textContent = `Failed: ${result.error}`;
+      resultEl.className = 'hamlib-test-fail';
+    }
+  } catch (err) {
+    resultEl.textContent = `Error: ${err.message}`;
+    resultEl.className = 'hamlib-test-fail';
+  } finally {
+    btn.disabled = false;
+  }
+});
 
 // Close dropdowns when clicking outside
 document.addEventListener('click', () => {
@@ -6191,6 +6289,8 @@ async function openSettingsDialog() {
   // App mode radio
   const modeRadio = document.querySelector(`input[name="set-app-mode"][value="${appMode}"]`);
   if (modeRadio) modeRadio.checked = true;
+  // Pi access (The Net easter egg) — unlock gated features if previously authorized
+  if (typeof applyPiAccess === 'function') applyPiAccess(!!s.piAccess);
   settingsDialog.showModal();
 }
 
@@ -8454,6 +8554,7 @@ cwKeyerStatusEl.addEventListener('click', (e) => {
   if (cwPopoverOpen) { closeCwPopover(); return; }
   // Close other popovers
   if (typeof closeCatPopover === 'function') closeCatPopover();
+  if (typeof closeRigPopover === 'function') closeRigPopover();
   document.querySelectorAll('.multi-dropdown.open').forEach((d) => d.classList.remove('open'));
   openCwPopover();
 });
@@ -8496,6 +8597,214 @@ document.addEventListener('click', function unlockAudio() {
     if (sidetoneCtx && sidetoneCtx.state === 'suspended') sidetoneCtx.resume();
   }
 }, { once: true });
+
+// --- Rig Control Panel (popover from status bar) ---
+const rigPanelBtn = document.getElementById('rig-panel-btn');
+const rigPopover = document.getElementById('rig-popover');
+const rigAtuBtn = document.getElementById('rig-atu-btn');
+const rigNbBtn = document.getElementById('rig-nb-btn');
+const rigPowerOnBtn = document.getElementById('rig-power-on-btn');
+const rigPowerOffBtn = document.getElementById('rig-power-off-btn');
+const rigRfGain = document.getElementById('rig-rfgain');
+const rigRfGainLabel = document.getElementById('rig-rfgain-label');
+const rigTxPower = document.getElementById('rig-txpower');
+const rigTxPowerLabel = document.getElementById('rig-txpower-label');
+const rigFilterPresets = document.getElementById('rig-filter-presets');
+let rigPopoverOpen = false;
+let rigCurrentCaps = {};
+let rigCurrentMode = '';
+
+const RIG_FILTER_PRESETS = {
+  SSB: [1800, 2100, 2400, 2700, 3000, 3600],
+  CW:  [50, 100, 200, 500, 1000, 1500, 2400],
+  DIG: [500, 1000, 2000, 3000, 4000],
+};
+
+function formatFilterWidth(hz) {
+  return hz >= 1000 ? (hz / 1000).toFixed(hz % 1000 === 0 ? 0 : 1) + 'k' : hz + '';
+}
+
+function rigGetFilterPresets(mode) {
+  const m = (mode || '').toUpperCase();
+  if (m === 'CW') return RIG_FILTER_PRESETS.CW;
+  if (['FT8','FT4','FT2','DIGU','DIGL','RTTY','PKTUSB','PKTLSB'].includes(m)) return RIG_FILTER_PRESETS.DIG;
+  return RIG_FILTER_PRESETS.SSB;
+}
+
+function rigBuildFilterPresets(mode, currentWidth) {
+  const presets = rigGetFilterPresets(mode);
+  rigFilterPresets.innerHTML = '';
+  for (const w of presets) {
+    const btn = document.createElement('button');
+    btn.textContent = formatFilterWidth(w);
+    btn.title = w + ' Hz';
+    if (currentWidth && Math.abs(currentWidth - w) < 25) btn.classList.add('active');
+    btn.addEventListener('click', () => {
+      window.api.rigControl({ action: 'set-filter-width', value: w });
+    });
+    rigFilterPresets.appendChild(btn);
+  }
+}
+
+function rigApplyCapabilities(caps) {
+  rigCurrentCaps = caps || {};
+  rigAtuBtn.style.display = caps.atu ? '' : 'none';
+  rigNbBtn.style.display = caps.nb ? '' : 'none';
+  rigPowerOnBtn.style.display = caps.power ? '' : 'none';
+  rigPowerOffBtn.style.display = caps.power ? '' : 'none';
+  rigRfGain.closest('.rig-popover-row').style.display = caps.rfgain ? '' : 'none';
+  rigTxPower.closest('.rig-popover-row').style.display = caps.txpower ? '' : 'none';
+  rigFilterPresets.closest('.rig-popover-row').style.display = caps.filter ? '' : 'none';
+}
+
+function positionRigPopover() {
+  const rect = rigPanelBtn.getBoundingClientRect();
+  const bar = rigPanelBtn.closest('.status-bar');
+  const barRect = bar.getBoundingClientRect();
+  rigPopover.style.top = (rect.bottom - barRect.top + 4) + 'px';
+  rigPopover.style.left = (rect.left - barRect.left) + 'px';
+}
+
+function openRigPopover() {
+  positionRigPopover();
+  rigPopover.classList.remove('hidden');
+  rigPopoverOpen = true;
+  // Request current state from main process
+  window.api.rigControl({ action: 'get-state' });
+}
+
+function closeRigPopover() {
+  rigPopover.classList.add('hidden');
+  rigPopoverOpen = false;
+}
+
+rigPanelBtn.addEventListener('click', (e) => {
+  e.stopPropagation();
+  if (rigPopoverOpen) { closeRigPopover(); return; }
+  if (typeof closeCatPopover === 'function') closeCatPopover();
+  if (typeof closeCwPopover === 'function') closeCwPopover();
+  document.querySelectorAll('.multi-dropdown.open').forEach((d) => d.classList.remove('open'));
+  openRigPopover();
+});
+
+rigPopover.addEventListener('click', (e) => e.stopPropagation());
+
+// Close rig popover on outside click (extend existing document click handler)
+document.addEventListener('click', () => { if (rigPopoverOpen) closeRigPopover(); });
+
+// Button handlers
+rigAtuBtn.addEventListener('click', () => {
+  window.api.rigControl({ action: 'atu-tune' });
+});
+
+rigNbBtn.addEventListener('click', () => {
+  const newState = !rigNbBtn.classList.contains('active');
+  window.api.rigControl({ action: 'set-nb', value: newState });
+});
+
+rigPowerOnBtn.addEventListener('click', () => {
+  window.api.rigControl({ action: 'power-on' });
+});
+
+rigPowerOffBtn.addEventListener('click', () => {
+  window.api.rigControl({ action: 'power-off' });
+});
+
+// Slider handlers
+rigRfGain.addEventListener('input', () => {
+  const val = parseInt(rigRfGain.value, 10);
+  rigRfGainLabel.textContent = val;
+  window.api.rigControl({ action: 'set-rf-gain', value: val });
+});
+
+rigTxPower.addEventListener('input', () => {
+  const val = parseInt(rigTxPower.value, 10);
+  rigTxPowerLabel.textContent = val + 'W';
+  window.api.rigControl({ action: 'set-tx-power', value: val });
+});
+
+// Listen for rig state updates from main process
+window.api.onRigState((state) => {
+  if (!state) return;
+  // Update NB button
+  if (state.nb) {
+    rigNbBtn.classList.add('active');
+  } else {
+    rigNbBtn.classList.remove('active');
+  }
+  // Update sliders (only if user is not actively dragging)
+  if (document.activeElement !== rigRfGain && state.rfGain != null) {
+    rigRfGain.value = state.rfGain;
+    rigRfGainLabel.textContent = state.rfGain;
+  }
+  if (document.activeElement !== rigTxPower && state.txPower != null) {
+    rigTxPower.value = state.txPower;
+    rigTxPowerLabel.textContent = state.txPower + 'W';
+  }
+  // Update filter presets
+  if (state.mode) rigCurrentMode = state.mode;
+  rigBuildFilterPresets(state.mode || rigCurrentMode, state.filterWidth);
+  // Update capabilities (show/hide controls)
+  if (state.capabilities) rigApplyCapabilities(state.capabilities);
+});
+
+// Show/hide rig panel button based on CAT connection status
+window.api.onCatStatus((s) => {
+  if (s.connected) {
+    rigPanelBtn.classList.remove('hidden');
+  } else {
+    rigPanelBtn.classList.add('hidden');
+    if (rigPopoverOpen) closeRigPopover();
+  }
+});
+
+// --- Pi Access (The Net easter egg) ---
+// Ctrl+Shift+Click (Cmd+Shift+Click on Mac) on π unlocks JTCAT + Remote CW
+const piAccessEl = document.getElementById('pi-access');
+const piOverlay = document.getElementById('pi-overlay');
+const piGatedEls = document.querySelectorAll('.pi-gated');
+const jtcatBtn = document.getElementById('view-jtcat-btn');
+let piUnlocked = false;
+
+function applyPiAccess(unlocked) {
+  piUnlocked = unlocked;
+  for (const el of piGatedEls) {
+    el.classList.toggle('hidden', !unlocked);
+  }
+  if (jtcatBtn) jtcatBtn.classList.toggle('hidden', !unlocked);
+}
+
+piAccessEl.addEventListener('click', (e) => {
+  e.preventDefault();
+  e.stopPropagation();
+  const mod = e.ctrlKey || e.metaKey;
+  if (!mod || !e.shiftKey) return;
+  // Ctrl+Alt+Shift+Click (Cmd+Alt+Shift on Mac) → revoke access
+  if (e.altKey && piUnlocked) {
+    const txt = piOverlay.querySelector('.pi-overlay-text');
+    txt.textContent = 'ACCESS: REVOKED';
+    txt.style.color = '#ff1744';
+    txt.style.textShadow = '0 0 10px #ff1744, 0 0 30px #ff174480';
+    piOverlay.classList.remove('hidden');
+    setTimeout(() => {
+      piOverlay.classList.add('hidden');
+      txt.textContent = 'ACCESS: AUTHORIZED';
+      txt.style.color = '';
+      txt.style.textShadow = '';
+    }, 1800);
+    applyPiAccess(false);
+    window.api.saveSettings({ piAccess: false });
+    return;
+  }
+  // Ctrl+Shift+Click (Cmd+Shift on Mac) → grant access
+  if (piUnlocked) return;
+  piOverlay.classList.remove('hidden');
+  setTimeout(() => {
+    piOverlay.classList.add('hidden');
+  }, 1800);
+  applyPiAccess(true);
+  window.api.saveSettings({ piAccess: true });
+});
 
 // MIDI hot-plug: re-enumerate when devices change
 (async function initMidiHotplug() {
@@ -8587,6 +8896,7 @@ welcomeLightMode.addEventListener('change', () => applyTheme(welcomeLightMode.ch
 let welcomeRig = null; // rig configured in welcome dialog
 let welcomeHamlibLoaded = false;
 let welcomeSerialcatLoaded = false;
+let welcomeIcomLoaded = false;
 let welcomeAllRigOptions = [];
 
 function getWelcomeRadioType() {
@@ -8599,11 +8909,16 @@ function updateWelcomeRadioSubPanels() {
   document.getElementById('welcome-flex-config').classList.toggle('hidden', type !== 'flex');
   document.getElementById('welcome-tcpcat-config').classList.toggle('hidden', type !== 'tcpcat');
   document.getElementById('welcome-serialcat-config').classList.toggle('hidden', type !== 'serialcat');
+  document.getElementById('welcome-icom-config').classList.toggle('hidden', type !== 'icom');
   document.getElementById('welcome-hamlib-config').classList.toggle('hidden', type !== 'hamlib');
   document.getElementById('welcome-rigctldnet-config').classList.toggle('hidden', type !== 'rigctldnet');
   if (type === 'serialcat' && !welcomeSerialcatLoaded) {
     welcomeSerialcatLoaded = true;
     loadWelcomeSerialcatPorts();
+  }
+  if (type === 'icom' && !welcomeIcomLoaded) {
+    welcomeIcomLoaded = true;
+    loadWelcomeIcomPorts();
   }
   if (type === 'hamlib' && !welcomeHamlibLoaded) {
     welcomeHamlibLoaded = true;
@@ -8614,6 +8929,18 @@ function updateWelcomeRadioSubPanels() {
 async function loadWelcomeSerialcatPorts() {
   const ports = await window.api.listPorts();
   const sel = document.getElementById('welcome-serialcat-port');
+  sel.innerHTML = '';
+  for (const p of ports) {
+    const opt = document.createElement('option');
+    opt.value = p.path;
+    opt.textContent = `${p.path} — ${p.friendlyName}`;
+    sel.appendChild(opt);
+  }
+}
+
+async function loadWelcomeIcomPorts() {
+  const ports = await window.api.listPorts();
+  const sel = document.getElementById('welcome-icom-port');
   sel.innerHTML = '';
   for (const p of ports) {
     const opt = document.createElement('option');
@@ -8659,6 +8986,16 @@ function buildWelcomeCatTarget() {
       path: manual || document.getElementById('welcome-serialcat-port').value,
       baudRate: parseInt(document.getElementById('welcome-serialcat-baud').value, 10) || 9600,
       dtrOff: document.getElementById('welcome-serialcat-dtr-off').checked,
+    };
+  } else if (type === 'icom') {
+    const manual = document.getElementById('welcome-icom-port-manual').value.trim();
+    const modelSelect = document.getElementById('welcome-icom-model');
+    return {
+      type: 'icom',
+      path: manual || document.getElementById('welcome-icom-port').value,
+      baudRate: parseInt(document.getElementById('welcome-icom-baud').value, 10) || 115200,
+      civAddress: parseInt(modelSelect.value, 16),
+      civModel: modelSelect.options[modelSelect.selectedIndex].text,
     };
   } else if (type === 'hamlib') {
     const manual = document.getElementById('welcome-rig-port-manual').value.trim();
