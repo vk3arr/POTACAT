@@ -1368,7 +1368,13 @@ bandButtonsEl.addEventListener('click', (e) => {
   const band = btn.dataset.band;
   const freq = getBandQsyFreq(band);
   if (freq) {
-    const mode = radioMode || 'USB';
+    const curMode = (radioMode || 'USB').toUpperCase();
+    let mode = curMode;
+    // Flip sideband for SSB: LSB below 10 MHz, USB at/above 10 MHz
+    if (curMode === 'USB' || curMode === 'LSB' || curMode === 'SSB') {
+      const lsbBands = new Set(['160m', '80m', '60m', '40m']);
+      mode = lsbBands.has(band) ? 'LSB' : 'USB';
+    }
     window.api.tune(String(freq), mode);
   }
 });
