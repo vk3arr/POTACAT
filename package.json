@@ -60,7 +60,7 @@
       "include": "build/installer.nsh"
     },
     "portable": {
-      "artifactName": "potacat-jtcat-004-beta-flaming-dumpster.${ext}"
+      "artifactName": "${productName}-Portable-${version}.${ext}"
     },
     "mac": {
       "target": "dmg",
