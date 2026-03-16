@@ -4064,7 +4064,14 @@ function forwardToLogbook(qsoData) {
     return sendUdpAdif(qsoData, host, port || 2333);
   }
   if (type === 'macloggerdx') {
-    return sendUdpAdif(qsoData, host, port || 9090);
+    // MacLoggerDX speaks WSJT-X binary protocol (same as HamRS)
+    const record = buildAdifRecord(qsoData);
+    const adifText = `<adif_ver:5>3.1.4\n<programid:7>POTACAT\n<EOH>\n${record}\n`;
+    const hp = port || 2237;
+    if (!hamrsBridge.socket || hamrsBridge.host !== host || hamrsBridge.port !== hp) {
+      hamrsBridge.start(host, hp);
+    }
+    return hamrsBridge.sendQso(qsoData, adifText);
   }
   if (type === 'n3fjp') {
     return sendN3fjpTcp(qsoData, host, port || 1100);
@@ -5244,9 +5251,10 @@ function tuneRadio(freqKhz, mode, brng, { clearXit } = {}) {
     if (smartSdr && smartSdr.connected && settings.catTarget && settings.catTarget.type === 'tcp') {
       const sliceIndex = (settings.catTarget.port || 5002) - 5002;
       const freqMhz = freqHz / 1e6;
+      const ssbSide = freqHz < 10000000 && !(freqHz >= 5300000 && freqHz <= 5410000) ? 'LSB' : 'USB';
       const flexMode = (mode === 'FT8' || mode === 'FT4' || mode === 'FT2' || mode === 'JT65' || mode === 'JT9' || mode === 'WSPR' || mode === 'DIGU' || mode === 'PKTUSB')
         ? 'DIGU' : (mode === 'DIGL' || mode === 'PKTLSB') ? 'DIGL'
-        : (mode === 'CW' ? 'CW' : (mode === 'SSB' || mode === 'USB' ? 'USB' : (mode === 'LSB' ? 'LSB' : null)));
+        : (mode === 'CW' ? 'CW' : (mode === 'SSB' ? ssbSide : (mode === 'USB' ? 'USB' : (mode === 'LSB' ? 'LSB' : null))));
       sendCatLog(`tune via SmartSDR API: slice=${sliceIndex} freq=${freqMhz.toFixed(6)}MHz mode=${mode}→${flexMode} filter=${filterWidth}`);
       smartSdr.tuneSlice(sliceIndex, freqMhz, flexMode, filterWidth);
       // Set or clear XIT on the slice
@@ -6184,8 +6192,9 @@ app.whenReady().then(() => {
       // JTCAT on a separate Flex slice
       const sliceIndex = slicePort - 5002;
       const freqHz = Math.round(parseFloat(frequency) * 1000);
+      const jtSsbSide = freqHz < 10000000 && !(freqHz >= 5300000 && freqHz <= 5410000) ? 'LSB' : 'USB';
       const flexMode = (mode === 'FT8' || mode === 'FT4' || mode === 'FT2' || mode === 'DIGU')
-        ? 'DIGU' : (mode === 'CW' ? 'CW' : (mode === 'SSB' || mode === 'USB' ? 'USB' : (mode === 'LSB' ? 'LSB' : null)));
+        ? 'DIGU' : (mode === 'CW' ? 'CW' : (mode === 'SSB' ? jtSsbSide : (mode === 'USB' ? 'USB' : (mode === 'LSB' ? 'LSB' : null))));
       const filterWidth = settings.digitalFilterWidth || 0;
       sendCatLog(`JTCAT tune via SmartSDR: slice=${String.fromCharCode(65 + sliceIndex)} freq=${(freqHz / 1e6).toFixed(6)}MHz mode=${flexMode}`);
       smartSdr.tuneSlice(sliceIndex, freqHz / 1e6, flexMode, filterWidth);
