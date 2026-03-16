@@ -119,7 +119,7 @@ let _currentAtuState = false;
 let _currentVfo = 'A';
 let _currentFilterWidth = 0;
 let _currentRfGain = 0;
-let _currentTxPower = 100;
+let _currentTxPower = 0; // 0 = unknown until radio reports actual power
 
 // Filter preset tables for rig controls (Hz values)
 const FILTER_PRESETS = {
