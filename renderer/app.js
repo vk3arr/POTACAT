@@ -3958,7 +3958,7 @@ const PRIVILEGE_RANGES = {
     [144000, 148000, 'all'], [420000, 450000, 'all'],
   ],
   us_technician: [
-    [3525, 3600, 'cw_digi'], [7025, 7125, 'cw_digi'], [21025, 21200, 'cw_digi'],
+    [3525, 3600, 'cw'], [7025, 7125, 'cw'], [21025, 21200, 'cw'],
     [28000, 28300, 'cw_digi'], [28300, 28500, 'phone'], [50000, 54000, 'all'],
     [144000, 148000, 'all'], [420000, 450000, 'all'],
   ],
@@ -3989,6 +3989,7 @@ function isOutOfPrivilege(freqKhz, mode, cls) {
   for (const [lower, upper, allowed] of ranges) {
     if (freqKhz >= lower && freqKhz <= upper) {
       if (allowed === 'all') return false;
+      if (allowed === 'cw' && modeUpper === 'CW') return false;
       if (allowed === 'cw_digi' && CW_DIGI_MODES.has(modeUpper)) return false;
       if (allowed === 'phone' && PHONE_MODES.has(modeUpper)) return false;
     }
