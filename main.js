@@ -6269,10 +6269,18 @@ app.whenReady().then(() => {
   });
 
   ipcMain.on('jtcat-popout-call-cq', async (_e, modifier) => {
-    if (!ft8Engine) return;
+    if (!ft8Engine) {
+      console.log('[JTCAT Popout] CQ aborted — engine not running');
+      sendCatLog('[JTCAT] CQ aborted — engine not running. Open JTCAT first.');
+      return;
+    }
     const myCall = (settings.myCallsign || '').toUpperCase();
     const myGrid = (settings.grid || '').toUpperCase().substring(0, 4);
-    if (!myCall || !myGrid) return;
+    if (!myCall || !myGrid) {
+      console.log('[JTCAT Popout] CQ aborted — callsign:', myCall || '(empty)', 'grid:', myGrid || '(empty)');
+      sendCatLog(`[JTCAT] CQ aborted — ${!myCall ? 'callsign not set' : 'grid not set'} in Settings`);
+      return;
+    }
     const mod = (modifier || '').toUpperCase().replace(/[^A-Z]/g, '').substring(0, 4);
     const txMsg = mod ? 'CQ ' + mod + ' ' + myCall + ' ' + myGrid : 'CQ ' + myCall + ' ' + myGrid;
     // TX on next available slot (opposite of last decoded)
@@ -6281,9 +6289,12 @@ app.whenReady().then(() => {
     popoutJtcatQso = { mode: 'cq', call: null, grid: null, phase: 'cq', txMsg, report: null, sentReport: null, myCall, myGrid, txRetries: 0 };
     ft8Engine._txEnabled = true;
     await ft8Engine.setTxMessage(txMsg);
-    ft8Engine.tryImmediateTx();
+    const fired = ft8Engine.tryImmediateTx();
+    if (!fired) {
+      sendCatLog(`[JTCAT] CQ queued for next ${nextSlot} slot: ${txMsg} (samples=${ft8Engine._txSamples ? 'ready' : 'encoding'})`);
+    }
     popoutBroadcastQso();
-    console.log('[JTCAT Popout] CQ:', txMsg, 'slot:', nextSlot);
+    console.log('[JTCAT Popout] CQ:', txMsg, 'slot:', nextSlot, 'immediate:', fired);
   });
 
   ipcMain.on('jtcat-popout-cancel-qso', () => {
