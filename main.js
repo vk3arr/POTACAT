@@ -2288,7 +2288,8 @@ function connectRemote() {
 
   remoteServer.on('tune', ({ freqKhz, mode, bearing }) => {
     console.log('[Echo CAT] Tune request:', freqKhz, 'kHz, mode:', mode || '(keep)');
-    tuneRadio(freqKhz, mode, bearing, { clearXit: true });
+    // Only clear XIT for manual freq entry (no mode); apply CW XIT for spot clicks
+    tuneRadio(freqKhz, mode, bearing, { clearXit: !mode });
   });
 
   remoteServer.on('ptt', ({ state }) => {
