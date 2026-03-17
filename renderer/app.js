@@ -10207,6 +10207,7 @@ const activatorStateInput = document.getElementById('activator-state');
 const activatorLogBtn = document.getElementById('activator-log-btn');
 const activatorLogBody = document.getElementById('activator-log-body');
 const activatorExportBtn = document.getElementById('activator-export');
+const activatorSpotBtn = document.getElementById('activator-spot-btn');
 const activatorMapBtn = document.getElementById('activator-map-btn');
 const activatorBackBtn = document.getElementById('activator-back');
 const activatorStartBtn = document.getElementById('activator-start-btn');
@@ -11797,6 +11798,35 @@ if (activatorExportBtn) {
     });
     if (result && result.success) {
       showLogToast(`Exported ${qsos.length} QSOs to ${result.path.split(/[\\/]/).pop()}`);
+    }
+  });
+}
+
+// --- Self-spot button ---
+if (activatorSpotBtn) {
+  activatorSpotBtn.addEventListener('click', async () => {
+    const ref = primaryParkRef();
+    if (!ref) { showLogToast('Set a park reference first', { warn: true }); return; }
+    if (!myCallsign) { showLogToast('Set your callsign in Settings first', { warn: true }); return; }
+    const freq = activatorFreqKhz;
+    if (!freq) { showLogToast('No frequency — tune your radio first', { warn: true }); return; }
+    const mode = document.getElementById('activator-mode').value || _currentMode || 'SSB';
+    try {
+      const result = await window.api.quickRespot({
+        callsign: myCallsign,
+        frequency: String(Math.round(freq * 10) / 10),
+        mode,
+        potaRespot: true,
+        potaReference: ref,
+        comment: `${myCallsign} activating ${ref} via POTACAT`,
+      });
+      if (result && result.success) {
+        showLogToast(`Spotted on POTA: ${ref} ${Math.round(freq)} kHz ${mode}`);
+      } else {
+        showLogToast('Self-spot failed: ' + (result?.error || 'unknown error'), { warn: true });
+      }
+    } catch (err) {
+      showLogToast('Self-spot failed: ' + (err.message || err), { warn: true });
     }
   });
 }
