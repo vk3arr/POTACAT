@@ -236,6 +236,7 @@ const setEnableSplit = document.getElementById('set-enable-split');
 const setEnableAtu = document.getElementById('set-enable-atu');
 const setEnableRotor = document.getElementById('set-enable-rotor');
 const rotorConfig = document.getElementById('rotor-config');
+const setRotorMode = document.getElementById('set-rotor-mode');
 const setRotorHost = document.getElementById('set-rotor-host');
 const setRotorPort = document.getElementById('set-rotor-port');
 const setEnableAg = document.getElementById('set-enable-ag');
@@ -5511,6 +5512,17 @@ function render() {
         }
         if (cell.col) td.setAttribute('data-col', cell.col);
         if (cell.cls) td.className = cell.cls;
+        // Bearing column: clickable in manual rotor mode
+        if (cell.col === 'bearing' && cell.val && s.bearing != null) {
+          td.classList.add('bearing-clickable');
+          td.title = `Click to rotate antenna to ${Math.round(s.bearing)}\u00B0`;
+          td.addEventListener('click', (e) => {
+            e.stopPropagation(); // don't tune the radio
+            window.api.rotateTo(s.bearing);
+            td.classList.add('bearing-sent');
+            setTimeout(() => td.classList.remove('bearing-sent'), 1500);
+          });
+        }
         if (cell.col === 'comments' && cell.val) td.title = cell.val;
         if (cell.newPark) {
           const nb = document.createElement('span');
@@ -6540,6 +6552,7 @@ async function openSettingsDialog(tab) {
   setTuneClick.checked = s.tuneClick === true;
   setEnableRotor.checked = s.enableRotor === true;
   if (s.enableRotor) rotorConfigured = true;
+  if (setRotorMode) setRotorMode.value = s.rotorMode || 'auto';
   setRotorHost.value = s.rotorHost || '127.0.0.1';
   setRotorPort.value = s.rotorPort || 12040;
   rotorConfig.classList.toggle('hidden', !s.enableRotor);
@@ -6836,6 +6849,7 @@ settingsSave.addEventListener('click', async () => {
   const hideWorkedEnabled = setHideWorked.checked;
   const tuneClickEnabled = setTuneClick.checked;
   const rotorEnabledVal = setEnableRotor.checked;
+  const rotorModeVal = setRotorMode ? setRotorMode.value : 'auto';
   const rotorHostVal = setRotorHost.value.trim() || '127.0.0.1';
   const rotorPortVal = parseInt(setRotorPort.value, 10) || 12040;
   const agEnabled = setEnableAg.checked;
@@ -6955,6 +6969,7 @@ settingsSave.addEventListener('click', async () => {
     hideWorked: hideWorkedEnabled,
     tuneClick: tuneClickEnabled,
     enableRotor: rotorEnabledVal,
+    rotorMode: rotorModeVal,
     rotorHost: rotorHostVal,
     rotorPort: rotorPortVal,
     enableAntennaGenius: agEnabled,

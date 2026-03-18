@@ -2740,6 +2740,19 @@ dialog input, dialog select {
   display: table-cell;
 }
 
+.bearing-clickable {
+  cursor: pointer;
+  color: var(--accent-blue, #4fc3f7);
+}
+
+.bearing-clickable:hover {
+  text-decoration: underline;
+}
+
+.bearing-sent {
+  color: var(--accent-green, #4ecca3) !important;
+}
+
 .log-cell {
   text-align: center;
   overflow: hidden;

@@ -1184,7 +1184,13 @@
       <span class="help-text" style="margin-left:12px;display:block;">Compass bearing from your QTH to each spot</span>
       <label class="checkbox-label"><input type="checkbox" id="set-enable-rotor"> PstRotator rotor control</label>
       <div id="rotor-config" class="radio-sub hidden">
-        <span class="help-text" style="font-size:12px;">Sends beam heading to PstRotator via UDP when you tune to a spot.</span>
+        <label style="margin-bottom:4px;">Rotate:
+          <select id="set-rotor-mode" style="width:160px;">
+            <option value="auto">Auto (rotate on every QSY)</option>
+            <option value="manual">Manual (click bearing to rotate)</option>
+          </select>
+        </label>
+        <span class="help-text" style="font-size:12px;">Sends beam heading to PstRotator via UDP. In Manual mode, click the bearing value in the spot table to turn the antenna.</span>
         <label>Host:
           <input type="text" id="set-rotor-host" placeholder="127.0.0.1" value="127.0.0.1" style="width:140px;">
         </label>

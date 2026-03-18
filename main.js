@@ -124,6 +124,8 @@ let _currentVfo = 'A';
 let _currentFilterWidth = 0;
 let _currentRfGain = 0;
 let _currentTxPower = 0; // 0 = unknown until radio reports actual power
+let _rfGainSuppressBroadcast = 0;  // timestamp: suppress ECHOCAT echo-back until this time
+let _txPowerSuppressBroadcast = 0;
 
 // Filter preset tables for rig controls (Hz values)
 const FILTER_PRESETS = {
@@ -2607,31 +2609,53 @@ function connectRemote() {
     console.log('[Echo CAT] Swap VFO →', newVfo);
   });
 
+  // RF Gain from ECHOCAT — debounce to avoid serial command flooding and feedback loops
+  let _rfGainTimer = null;
   remoteServer.on('set-rfgain', ({ value }) => {
-    if (flexSdr()) {
-      const dB = (value * 0.3) - 10;
-      smartSdr.setRfGain(0, dB);
-    } else if (cat && cat.connected) {
-      const rigType = detectRigType();
-      if (rigType === 'rigctld') cat.setRfGain(value / 100);
-      else cat.setRfGain(value); // Yaesu/Kenwood: 0-100 directly
-    }
     _currentRfGain = value;
-    broadcastRigState();
-    console.log('[Echo CAT] RF Gain →', value);
+    _rfGainSuppressBroadcast = Date.now() + 500; // suppress echo-back for 500ms
+    // Debounce the actual radio command (50ms)
+    if (_rfGainTimer) clearTimeout(_rfGainTimer);
+    _rfGainTimer = setTimeout(() => {
+      _rfGainTimer = null;
+      if (flexSdr()) {
+        const dB = (value * 0.3) - 10;
+        smartSdr.setRfGain(0, dB);
+      } else if (cat && cat.connected) {
+        const rigType = detectRigType();
+        if (rigType === 'rigctld') cat.setRfGain(value / 100);
+        else cat.setRfGain(value);
+      }
+    }, 50);
+    // Update desktop UI immediately (not ECHOCAT — suppress echo)
+    if (win && !win.isDestroyed()) win.webContents.send('rig-state', {
+      nb: _currentNbState, rfGain: _currentRfGain, txPower: _currentTxPower,
+      filterWidth: _currentFilterWidth, atuActive: _currentAtuState, mode: _currentMode,
+      capabilities: getRigCapabilities(detectRigType()),
+    });
   });
 
+  // TX Power from ECHOCAT — debounce to avoid serial command flooding and feedback loops
+  let _txPowerTimer = null;
   remoteServer.on('set-txpower', ({ value }) => {
-    if (flexSdr()) {
-      smartSdr.setTxPower(value);
-    } else if (cat && cat.connected) {
-      const rigType = detectRigType();
-      if (rigType === 'rigctld') cat.setTxPower(value / 100);
-      else cat.setTxPower(value); // Yaesu/Kenwood: 0-100 directly
-    }
     _currentTxPower = value;
-    broadcastRigState();
-    console.log('[Echo CAT] TX Power →', value);
+    _txPowerSuppressBroadcast = Date.now() + 500;
+    if (_txPowerTimer) clearTimeout(_txPowerTimer);
+    _txPowerTimer = setTimeout(() => {
+      _txPowerTimer = null;
+      if (flexSdr()) {
+        smartSdr.setTxPower(value);
+      } else if (cat && cat.connected) {
+        const rigType = detectRigType();
+        if (rigType === 'rigctld') cat.setTxPower(value / 100);
+        else cat.setTxPower(value);
+      }
+    }, 50);
+    if (win && !win.isDestroyed()) win.webContents.send('rig-state', {
+      nb: _currentNbState, rfGain: _currentRfGain, txPower: _currentTxPower,
+      filterWidth: _currentFilterWidth, atuActive: _currentAtuState, mode: _currentMode,
+      capabilities: getRigCapabilities(detectRigType()),
+    });
   });
 
   // Unified rig-control from ECHOCAT phone (same dispatch as desktop IPC)
@@ -3312,6 +3336,10 @@ function handleRemotePtt(state) {
 function broadcastRemoteRadioStatus() {
   if (!remoteServer || !remoteServer.running) return;
   const rigType = detectRigType();
+  const now = Date.now();
+  // Suppress rfgain/txpower echo-back to ECHOCAT while user is actively adjusting
+  const rfg = (typeof _rfGainSuppressBroadcast !== 'undefined' && now < _rfGainSuppressBroadcast) ? undefined : _currentRfGain;
+  const txp = (typeof _txPowerSuppressBroadcast !== 'undefined' && now < _txPowerSuppressBroadcast) ? undefined : _currentTxPower;
   const status = {
     freq: _currentFreqHz || 0,
     mode: _currentMode || '',
@@ -3322,8 +3350,8 @@ function broadcastRemoteRadioStatus() {
     atu: _currentAtuState,
     vfo: _currentVfo,
     filterWidth: _currentFilterWidth,
-    rfgain: _currentRfGain,
-    txpower: _currentTxPower,
+    rfgain: rfg,
+    txpower: txp,
     capabilities: getRigCapabilities(rigType),
   };
   remoteServer.broadcastRadioStatus(status);
@@ -5429,7 +5457,7 @@ function tuneRadio(freqKhz, mode, brng, { clearXit } = {}) {
     filterWidth = settings.digitalFilterWidth || 0;
   }
 
-  if (settings.enableRotor && settings.rotorActive !== false && brng != null && !isNaN(brng)) {
+  if (settings.enableRotor && settings.rotorActive !== false && settings.rotorMode !== 'manual' && brng != null && !isNaN(brng)) {
     sendRotorBearing(Math.round(brng));
   }
 
@@ -6393,6 +6421,12 @@ app.whenReady().then(() => {
     ];
     if (allowed.some(prefix => url.startsWith(prefix))) {
       shell.openExternal(url);
+    }
+  });
+
+  ipcMain.on('rotate-to', (_e, azimuth) => {
+    if (settings.enableRotor && !isNaN(azimuth)) {
+      sendRotorBearing(Math.round(azimuth));
     }
   });
 
