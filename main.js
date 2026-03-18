@@ -2146,6 +2146,9 @@ function connectAntennaGenius() {
       win.webContents.send('ag-antenna-names', names);
     }
   });
+  agClient.on('log', (msg) => {
+    sendCatLog(`[AG] ${msg}`);
+  });
   agClient.on('error', (err) => {
     sendCatLog(`[AG] Error: ${err.message}`);
   });
