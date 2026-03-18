@@ -10699,12 +10699,24 @@ function updateActivatorUtc() {
 }
 
 function updateActivatorCounter() {
-  const count = activatorContacts.length;
+  const total = activatorContacts.length;
   const totalRecords = activatorContacts.reduce((sum, c) => sum + (c.qsoDataList ? c.qsoDataList.length : 1), 0);
-  activatorCounterEl.textContent = count;
-  activatorCounterEl.classList.toggle('valid', count >= 10);
-  const recordNote = totalRecords > count ? ` (${totalRecords} ADIF records)` : '';
-  activatorCounterEl.title = `${count} contact${count !== 1 ? 's' : ''} logged${recordNote}${count >= 10 ? ' — valid activation!' : ` (need ${10 - count} more)`}`;
+  // Count contacts for the current UTC day (POTA requires 10 per UTC day)
+  const todayStr = new Date().toISOString().slice(0, 10);
+  const todayCount = activatorContacts.filter(c => {
+    const ts = c.qsoData?.timeOn || c.qsoData?.spotTime || c.timestamp;
+    return ts && ts.startsWith(todayStr);
+  }).length;
+  // If activation spans midnight, show today's count; otherwise show total
+  const spansDay = total > 0 && todayCount < total;
+  const displayCount = spansDay ? todayCount : total;
+  activatorCounterEl.textContent = spansDay ? `${todayCount}/${total}` : String(total);
+  activatorCounterEl.classList.toggle('valid', displayCount >= 10);
+  const recordNote = totalRecords > total ? ` (${totalRecords} ADIF records)` : '';
+  const dayNote = spansDay ? ` (${todayCount} today UTC / ${total} total session)` : '';
+  activatorCounterEl.title = spansDay
+    ? `${todayCount} today UTC / ${total} total session${recordNote}${todayCount >= 10 ? ' — valid activation today!' : ` (need ${10 - todayCount} more today)`}`
+    : `${total} contact${total !== 1 ? 's' : ''} logged${recordNote}${total >= 10 ? ' — valid activation!' : ` (need ${10 - total} more)`}`;
 }
 
 function renderActivatorLog() {
