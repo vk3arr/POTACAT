@@ -524,7 +524,7 @@
         if (msg.colorblindMode) applyRemoteColorblind(true);
         // CW keyer availability
         cwAvailable = !!msg.cwAvailable;
-        cwPanel.classList.toggle('hidden', !cwAvailable);
+        updateCwPanelVisibility();
         if (msg.settings) {
           myCallsign = msg.settings.myCallsign || '';
           phoneGrid = msg.settings.grid || phoneGrid;
@@ -619,7 +619,7 @@
 
       case 'cw-available':
         cwAvailable = !!msg.enabled;
-        cwPanel.classList.toggle('hidden', !cwAvailable);
+        updateCwPanelVisibility();
         updateCwEnableBtn();
         break;
 
@@ -831,6 +831,7 @@
       const isVoice = (m === 'SSB' || m === 'USB' || m === 'LSB' || m === 'FM' || m === 'AM');
       pttBtn.classList.toggle('hidden', !isVoice);
       estopBtn.classList.toggle('hidden', !isVoice);
+      updateCwPanelVisibility();
     }
     if (s.catConnected !== undefined) {
       catDot.classList.toggle('connected', s.catConnected);
@@ -2454,9 +2455,8 @@
     pttBtn.style.display = tab === 'ft8' ? 'none' : '';
     // Hide entire bottom bar (Audio/PTT/STOP) on FT8 tab — no voice audio needed
     bottomBar.style.display = tab === 'ft8' ? 'none' : '';
-    // Hide CW panel on tabs where it's not relevant
-    var cwTabs = { spots: 1, map: 1, log: 1, activate: 1 };
-    if (cwAvailable) cwPanel.classList.toggle('hidden', !cwTabs[tab]);
+    // Hide CW panel on tabs where it's not relevant (also gated on CW mode)
+    updateCwPanelVisibility();
     if (tab === 'spots') {
       spotList.classList.remove('hidden');
       filterToolbar.classList.remove('hidden');
@@ -3768,6 +3768,13 @@
   });
 
   // --- CW Keyer ---
+  function updateCwPanelVisibility() {
+    var cwTabs = { spots: 1, map: 1, log: 1, activate: 1 };
+    var isCwMode = currentMode.toUpperCase() === 'CW';
+    var show = cwAvailable && isCwMode && !!cwTabs[activeTab];
+    cwPanel.classList.toggle('hidden', !show);
+  }
+
   let cwAvailable = false;
   let cwWpm = 20;
   let cwMode = 'iambicB';
@@ -3917,7 +3924,7 @@
     }
     // Optimistic update — server will confirm with cw-available
     cwAvailable = newState;
-    cwPanel.classList.toggle('hidden', !cwAvailable);
+    updateCwPanelVisibility();
     updateCwEnableBtn();
   });
 
