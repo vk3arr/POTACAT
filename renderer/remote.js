@@ -4031,8 +4031,14 @@
     tinymidi: { dit: '[', dah: ']', match: function(e) { return e.key; } },
     vail:     { dit: 'Control', dah: 'Control', match: function(e) {
       // Vail/VBand: Left Ctrl = dit, Right Ctrl = dah
-      if (e.key !== 'Control') return null;
-      return e.location === 1 ? 'dit' : e.location === 2 ? 'dah' : null;
+      // Use e.code as primary (reliable on Android USB HID), e.location as fallback
+      if (e.code === 'ControlLeft') return 'dit';
+      if (e.code === 'ControlRight') return 'dah';
+      if (e.key === 'Control') {
+        if (e.location === 1) return 'dit';
+        if (e.location === 2) return 'dah';
+      }
+      return null;
     }},
   };
   var paddleType = localStorage.getItem('echocat-paddle-type') || 'tinymidi';
