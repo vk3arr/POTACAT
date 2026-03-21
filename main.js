@@ -1891,6 +1891,7 @@ function processPopoutJtcatQso(results) {
 }
 
 function startJtcat(mode) {
+  console.log('[JTCAT ENGINE] startJtcat called, mode:', mode);
   stopJtcat();
   ft8Engine = new Ft8Engine();
   ft8Engine.setMode(mode || 'FT8');
