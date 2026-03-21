@@ -731,8 +731,51 @@
     var bandBtn = document.querySelector('.jtcat-band-btn[data-freq="' + lastFreq + '"]');
     if (!bandBtn) bandBtn = document.querySelector('.jtcat-band-btn[data-band="20m"]');
     if (bandBtn) selectBand(bandBtn, false);
+    console.log('[JTCAT popout] calling jtcatStart, mode:', modeSelect.value);
     window.api.jtcatStart(modeSelect.value);
+    // Start audio capture directly in the popout window
+    startPopoutAudio(s.remoteAudioInput || '');
+  }).catch(function(err) {
+    console.error('[JTCAT popout] getSettings error:', err);
   });
+
+  // --- Audio capture (runs in the popout window, sends samples to main process) ---
+  var popoutAudioCtx = null;
+  var popoutAudioStream = null;
+  var popoutAudioProcessor = null;
+
+  async function startPopoutAudio(deviceId) {
+    try {
+      var constraints = {
+        channelCount: 1,
+        echoCancellation: false,
+        noiseSuppression: false,
+        autoGainControl: false,
+        sampleRate: { ideal: 12000 }
+      };
+      if (deviceId) constraints.deviceId = { exact: deviceId };
+      try {
+        popoutAudioStream = await navigator.mediaDevices.getUserMedia({ audio: constraints });
+      } catch (e) {
+        console.warn('[JTCAT popout] Configured input failed, using default:', e.message);
+        delete constraints.deviceId;
+        popoutAudioStream = await navigator.mediaDevices.getUserMedia({ audio: constraints });
+      }
+      popoutAudioCtx = new AudioContext({ sampleRate: 12000 });
+      if (popoutAudioCtx.state === 'suspended') await popoutAudioCtx.resume();
+      var source = popoutAudioCtx.createMediaStreamSource(popoutAudioStream);
+      popoutAudioProcessor = popoutAudioCtx.createScriptProcessor(4096, 1, 1);
+      popoutAudioProcessor.onaudioprocess = function(e) {
+        var samples = e.inputBuffer.getChannelData(0);
+        window.api.jtcatAudio(Array.from(samples));
+      };
+      source.connect(popoutAudioProcessor);
+      popoutAudioProcessor.connect(popoutAudioCtx.destination);
+      console.log('[JTCAT popout] Audio capture started');
+    } catch (err) {
+      console.error('[JTCAT popout] Audio capture failed:', err.message);
+    }
+  }
 
   // --- Map toggle & popout ---
   var mapPane = document.querySelector('.jp-map-pane');

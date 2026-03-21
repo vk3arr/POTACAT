@@ -6264,6 +6264,7 @@ app.whenReady().then(() => {
         preload: path.join(__dirname, 'preload-jtcat-popout.js'),
         contextIsolation: true,
         nodeIntegration: false,
+        autoplayPolicy: 'no-user-gesture-required',
       },
     });
     const saved = settings.jtcatPopoutBounds;
