@@ -12750,6 +12750,9 @@ async function startJtcatAudio() {
     // Use the same audio input device as ECHOCAT (remoteAudioInput)
     if (s.remoteAudioInput) {
       audioConstraints.deviceId = { exact: s.remoteAudioInput };
+      console.log('[JTCAT] Using configured audio input:', s.remoteAudioInput);
+    } else {
+      console.log('[JTCAT] No audio input configured, using default');
     }
     try {
       jtcatAudioStream = await navigator.mediaDevices.getUserMedia({ audio: audioConstraints });
@@ -12759,10 +12762,17 @@ async function startJtcatAudio() {
       delete audioConstraints.deviceId;
       jtcatAudioStream = await navigator.mediaDevices.getUserMedia({ audio: audioConstraints });
     }
+    var audioTrack = jtcatAudioStream.getAudioTracks()[0];
+    console.log('[JTCAT] Got audio track:', audioTrack ? audioTrack.label : 'NONE',
+                'readyState:', audioTrack ? audioTrack.readyState : 'N/A',
+                'enabled:', audioTrack ? audioTrack.enabled : 'N/A');
+
     jtcatAudioCtx = new AudioContext({ sampleRate: 12000 });
-    // Chromium 142+ (Electron 39): AudioContext starts suspended, must resume explicitly
+    console.log('[JTCAT] AudioContext created, state:', jtcatAudioCtx.state,
+                'sampleRate:', jtcatAudioCtx.sampleRate);
     if (jtcatAudioCtx.state === 'suspended') {
       await jtcatAudioCtx.resume();
+      console.log('[JTCAT] AudioContext resumed, state:', jtcatAudioCtx.state);
     }
     var source = jtcatAudioCtx.createMediaStreamSource(jtcatAudioStream);
 
@@ -12774,9 +12784,16 @@ async function startJtcatAudio() {
 
     // ScriptProcessorNode: 4096 samples at 12kHz = ~341ms per callback
     jtcatAudioProcessor = jtcatAudioCtx.createScriptProcessor(4096, 1, 1);
+    var _jtcatAudioCallbackCount = 0;
     jtcatAudioProcessor.onaudioprocess = function(e) {
       try {
         var samples = e.inputBuffer.getChannelData(0);
+        _jtcatAudioCallbackCount++;
+        if (_jtcatAudioCallbackCount <= 3) {
+          var maxVal = 0;
+          for (var i = 0; i < samples.length; i++) if (Math.abs(samples[i]) > maxVal) maxVal = Math.abs(samples[i]);
+          console.log('[JTCAT] onaudioprocess #' + _jtcatAudioCallbackCount + ' samples:', samples.length, 'peak:', maxVal.toFixed(6));
+        }
         // Send copy of buffer to main process for FT8 decode
         window.api.jtcatAudio(Array.from(samples));
       } catch (err) {
@@ -12785,6 +12802,7 @@ async function startJtcatAudio() {
     };
     source.connect(jtcatAudioProcessor);
     jtcatAudioProcessor.connect(jtcatAudioCtx.destination);
+    console.log('[JTCAT] Audio pipeline connected (source → analyser + processor → destination)');
 
     // Monitor audio stream — some rigs (e.g. Yaesu FT-710) disconnect USB audio during TX
     var audioTrack = jtcatAudioStream.getAudioTracks()[0];
@@ -13669,12 +13687,19 @@ function jtcatMapClear() {
 var waterfallCtx = jtcatWaterfall.getContext('2d');
 var waterfallAnimFrame = null;
 
+var _wfLogCount = 0;
 function jtcatWaterfallLoop() {
   if (!jtcatRunning || !jtcatAnalyser) return;
 
   try {
   var freqData = new Uint8Array(jtcatAnalyser.frequencyBinCount);
   jtcatAnalyser.getByteFrequencyData(freqData);
+  if (_wfLogCount < 3) {
+    var maxBin = 0;
+    for (var di = 0; di < freqData.length; di++) if (freqData[di] > maxBin) maxBin = freqData[di];
+    console.log('[JTCAT WF] bins:', freqData.length, 'maxBin:', maxBin, 'ctx.state:', jtcatAudioCtx ? jtcatAudioCtx.state : 'null');
+    _wfLogCount++;
+  }
 
   // AnalyserNode at 12kHz with fftSize=2048 gives 1024 bins covering 0–6000 Hz.
   // FT8 passband is 0–3000 Hz = first half of bins (512 bins).
