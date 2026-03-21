@@ -583,6 +583,9 @@
       case 'directory':
         directoryNets = msg.nets || [];
         directorySwl = msg.swl || [];
+        // Show/hide Dir tab based on whether we have data
+        var dirTabBtn = document.getElementById('dir-tab-btn');
+        if (dirTabBtn) dirTabBtn.classList.toggle('hidden', !directoryNets.length && !directorySwl.length);
         if (activeTab === 'dir') renderDirectoryTab();
         break;
 
@@ -4291,8 +4294,14 @@
             // Enable the playback track (it's new so enabled by default, but be explicit)
             playTrack.enabled = true;
 
-            // Key PTT
-            pttStart();
+            // Key PTT directly (can't use pttStart() — it has SSB macro guard that would cancel us)
+            pttDown = true;
+            pttBtn.classList.add('active');
+            txBanner.classList.remove('hidden');
+            muteRxAudio(true);
+            if (ws && ws.readyState === WebSocket.OPEN) {
+              ws.send(JSON.stringify({ type: 'ptt', state: true }));
+            }
 
             // Start playback
             ssbPlaybackSource.start(0);
