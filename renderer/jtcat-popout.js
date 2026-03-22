@@ -751,7 +751,6 @@
         echoCancellation: false,
         noiseSuppression: false,
         autoGainControl: false,
-        sampleRate: { ideal: 12000 }
       };
       if (deviceId) constraints.deviceId = { exact: deviceId };
       try {

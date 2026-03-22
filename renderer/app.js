@@ -12747,7 +12747,6 @@ async function startJtcatAudio() {
       echoCancellation: false,
       noiseSuppression: false,
       autoGainControl: false,
-      sampleRate: { ideal: 12000 }
     };
     // Use the same audio input device as ECHOCAT (remoteAudioInput)
     if (s.remoteAudioInput) {
