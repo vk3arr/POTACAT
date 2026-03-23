@@ -565,6 +565,50 @@ html, body {
   border-color: var(--pota);
 }
 
+.rc-custom-cat-btns {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+.rc-custom-cat-btn {
+  min-width: 50px;
+  height: 32px;
+  padding: 0 10px;
+  font-size: 12px;
+  font-weight: 600;
+  background: var(--bg-card);
+  color: var(--text);
+  border: 1px solid #444;
+  border-radius: 6px;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.rc-custom-cat-btn:active { background: var(--bg); border-color: var(--pota); }
+.rc-custom-cat-btn.sent { background: #2a6e4e; border-color: #4ecca3; }
+.rc-custom-cat-edit-btn {
+  font-size: 11px;
+  color: var(--text-dim);
+  background: none;
+  border: 1px solid #444;
+  border-radius: 4px;
+  padding: 2px 8px;
+  cursor: pointer;
+}
+.rc-custom-cat-edit-btn:active { color: var(--pota); border-color: var(--pota); }
+.rc-custom-cat-editor { margin-top: 6px; }
+.rc-custom-cat-editor-row { display: flex; gap: 4px; margin-bottom: 4px; align-items: center; }
+.rc-custom-cat-editor-row input {
+  background: var(--bg);
+  border: 1px solid #444;
+  color: var(--text);
+  border-radius: 4px;
+  padding: 4px 6px;
+  font-size: 12px;
+}
+.rc-custom-cat-editor-row .cce-name { width: 70px; }
+.rc-custom-cat-editor-row .cce-cmd { flex: 1; font-family: monospace; }
+
 .rc-toggle.active {
   color: var(--pota);
   border-color: var(--pota);

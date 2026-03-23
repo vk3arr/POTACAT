@@ -545,6 +545,7 @@
           soDistMi.classList.toggle('active', distUnit === 'mi');
           soDistKm.classList.toggle('active', distUnit === 'km');
           if (msg.settings.remoteCwMacros) syncMacrosFromSettings(msg.settings.remoteCwMacros);
+          if (msg.settings.customCatButtons) loadCustomCatButtons(msg.settings.customCatButtons);
           // PSTRotator toggle — show when configured, reflect active state
           if (msg.settings.enableRotor != null) {
             rotorConfigured = !!msg.settings.enableRotor;
@@ -1764,6 +1765,103 @@
   document.getElementById('rc-power-off').addEventListener('click', () => {
     if (ws && ws.readyState === WebSocket.OPEN) {
       ws.send(JSON.stringify({ type: 'rig-control', data: { action: 'power-off' } }));
+    }
+  });
+
+  // --- Custom CAT Buttons ---
+  var customCatSection = document.getElementById('rc-custom-cat');
+  var customCatBtnsEl = document.getElementById('rc-custom-cat-btns');
+  var customCatEditBtn = document.getElementById('rc-custom-cat-edit');
+  var customCatData = [];
+  var customCatEditing = false;
+
+  function loadCustomCatButtons(buttons) {
+    if (!buttons || !Array.isArray(buttons)) return;
+    customCatData = buttons;
+    while (customCatData.length < 5) customCatData.push({ name: '', command: '' });
+    renderCustomCatButtons();
+  }
+
+  function renderCustomCatButtons() {
+    customCatBtnsEl.innerHTML = '';
+    var hasAny = false;
+    for (var i = 0; i < customCatData.length; i++) {
+      var entry = customCatData[i];
+      if (!entry.name && !entry.command) continue;
+      hasAny = true;
+      var btn = document.createElement('button');
+      btn.className = 'rc-custom-cat-btn';
+      btn.textContent = entry.name || ('CAT ' + (i + 1));
+      btn.dataset.idx = i;
+      btn.addEventListener('click', function() {
+        var idx = parseInt(this.dataset.idx);
+        var cmd = customCatData[idx] && customCatData[idx].command;
+        if (!cmd || !ws || ws.readyState !== WebSocket.OPEN) return;
+        ws.send(JSON.stringify({ type: 'rig-control', data: { action: 'send-custom-cat', command: cmd } }));
+        this.classList.add('sent');
+        var b = this;
+        setTimeout(function() { b.classList.remove('sent'); }, 300);
+      });
+      customCatBtnsEl.appendChild(btn);
+    }
+    customCatSection.classList.toggle('hidden', !hasAny && !customCatEditing);
+    // Re-render editor if open
+    if (customCatEditing) renderCustomCatEditor();
+  }
+
+  function renderCustomCatEditor() {
+    var existing = customCatSection.querySelector('.rc-custom-cat-editor');
+    if (existing) existing.remove();
+    var editor = document.createElement('div');
+    editor.className = 'rc-custom-cat-editor';
+    for (var i = 0; i < 5; i++) {
+      var row = document.createElement('div');
+      row.className = 'rc-custom-cat-editor-row';
+      row.dataset.idx = i;
+      var nameInput = document.createElement('input');
+      nameInput.className = 'cce-name';
+      nameInput.placeholder = 'Label';
+      nameInput.maxLength = 12;
+      nameInput.value = customCatData[i] ? customCatData[i].name || '' : '';
+      var cmdInput = document.createElement('input');
+      cmdInput.className = 'cce-cmd';
+      cmdInput.placeholder = 'CAT command';
+      cmdInput.maxLength = 64;
+      cmdInput.value = customCatData[i] ? customCatData[i].command || '' : '';
+      row.appendChild(nameInput);
+      row.appendChild(cmdInput);
+      editor.appendChild(row);
+    }
+    customCatSection.appendChild(editor);
+    // Auto-save on blur
+    editor.addEventListener('focusout', function() {
+      for (var j = 0; j < 5; j++) {
+        var r = editor.querySelectorAll('.rc-custom-cat-editor-row')[j];
+        if (!r) continue;
+        customCatData[j] = {
+          name: r.querySelector('.cce-name').value.trim(),
+          command: r.querySelector('.cce-cmd').value.trim(),
+        };
+      }
+      renderCustomCatButtons();
+      // Save back to POTACAT
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({ type: 'save-custom-cat-buttons', buttons: customCatData }));
+      }
+    });
+  }
+
+  customCatEditBtn.addEventListener('click', function(e) {
+    e.stopPropagation();
+    customCatEditing = !customCatEditing;
+    customCatEditBtn.textContent = customCatEditing ? 'Done' : 'Edit';
+    customCatSection.classList.remove('hidden');
+    if (customCatEditing) {
+      renderCustomCatEditor();
+    } else {
+      var existing = customCatSection.querySelector('.rc-custom-cat-editor');
+      if (existing) existing.remove();
+      renderCustomCatButtons();
     }
   });
 

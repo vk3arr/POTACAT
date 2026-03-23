@@ -894,6 +894,13 @@ async function loadPrefs() {
   qrzFullName = settings.qrzFullName === true;
   enableLogging = settings.enableLogging === true;
   enableBannerLogger = settings.enableBannerLogger === true;
+  // Sync custom CAT buttons from settings.json (authoritative source for ECHOCAT sync)
+  if (settings.customCatButtons && Array.isArray(settings.customCatButtons)) {
+    customCatButtons = settings.customCatButtons;
+    while (customCatButtons.length < 5) customCatButtons.push({ name: '', command: '' });
+    localStorage.setItem('custom-cat-buttons', JSON.stringify(customCatButtons));
+    if (typeof loadCustomButtons === 'function') loadCustomButtons();
+  }
   n1mmRst = settings.n1mmRst === true;
   applyRstMode();
   defaultPower = parseInt(settings.defaultPower, 10) || 100;
@@ -10035,6 +10042,8 @@ function loadCustomButtons() {
 
 function saveCustomButtons() {
   localStorage.setItem('custom-cat-buttons', JSON.stringify(customCatButtons));
+  // Persist to settings.json so ECHOCAT can access them
+  window.api.saveSettings({ customCatButtons });
 }
 
 loadCustomButtons();

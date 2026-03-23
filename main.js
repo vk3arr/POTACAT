@@ -2312,6 +2312,7 @@ function updateRemoteSettings() {
     rotorActive: settings.rotorActive !== false,
     remoteCwEnabled: !!settings.remoteCwEnabled,
     remoteCwMacros: settings.remoteCwMacros || null,
+    customCatButtons: settings.customCatButtons || null,
   });
 }
 
@@ -2548,6 +2549,16 @@ function connectRemote() {
       win.webContents.send('settings-changed', { remoteCwEnabled: !!enabled });
     }
     console.log(`[Echo CAT] Remote CW ${enabled ? 'enabled' : 'disabled'} by phone`);
+  });
+
+  // Phone updated custom CAT buttons — save to settings and sync desktop
+  remoteServer.on('save-custom-cat-buttons', (buttons) => {
+    settings.customCatButtons = buttons;
+    saveSettings(settings);
+    if (win && !win.isDestroyed()) {
+      win.webContents.send('reload-prefs');
+    }
+    console.log('[Echo CAT] Custom CAT buttons updated from phone');
   });
 
   // Enable remote CW if setting is on
