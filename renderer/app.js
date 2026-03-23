@@ -1967,6 +1967,10 @@ async function saveBannerQso() {
     gridsquare: parkLocGrid || (qrzInfo ? (qrzInfo.grid || '') : ''),
     country: qrzInfo ? (qrzInfo.country || '') : '',
     comment: commentBase,
+    // Include activation context if activator mode is running
+    ...(appMode === 'activator' && activationActive && activatorParkRefs.length > 0
+      ? { mySig: 'POTA', mySigInfo: activatorParkRefs[0].ref }
+      : {}),
     respot: wantsRespot && type === 'pota',
     wwffRespot: wantsRespot && type === 'wwff',
     wwffReference: wantsRespot && type === 'wwff' ? ref : '',
@@ -2624,6 +2628,42 @@ setEnableRemote.addEventListener('change', async () => {
 
 setRemoteRequireToken.addEventListener('change', () => {
   remoteTokenRow.classList.toggle('hidden', !setRemoteRequireToken.checked);
+});
+
+// --- Remote Launcher ---
+const setEnableLauncher = document.getElementById('set-enable-launcher');
+const launcherConfig = document.getElementById('launcher-config');
+const launcherUrlDisplay = document.getElementById('launcher-url-display');
+const launcherStatus = document.getElementById('launcher-status');
+
+setEnableLauncher.addEventListener('change', async () => {
+  launcherConfig.classList.toggle('hidden', !setEnableLauncher.checked);
+  if (setEnableLauncher.checked) {
+    launcherStatus.textContent = 'Installing...';
+    const result = await window.api.installLauncher();
+    if (result.ok) {
+      launcherStatus.textContent = 'Installed. Will auto-start at next login.';
+      launcherStatus.style.color = '#4ecca3';
+    } else {
+      launcherStatus.textContent = 'Install failed: ' + (result.error || 'unknown');
+      launcherStatus.style.color = '#e94560';
+    }
+    // Show URL
+    try {
+      const ips = await window.api.getLocalIPs();
+      const tsIp = ips.find(ip => ip.tailscale);
+      const lanIp = ips.find(ip => !ip.tailscale);
+      const ip = tsIp || lanIp;
+      if (ip) launcherUrlDisplay.textContent = 'https://' + ip.address + ':7301/';
+      else launcherUrlDisplay.textContent = 'https://YOUR_IP:7301/';
+    } catch { launcherUrlDisplay.textContent = 'https://YOUR_IP:7301/'; }
+  } else {
+    launcherStatus.textContent = 'Removing...';
+    const result = await window.api.uninstallLauncher();
+    launcherStatus.textContent = result.ok ? 'Removed.' : 'Error: ' + (result.error || 'unknown');
+    launcherStatus.style.color = result.ok ? '#aaa' : '#e94560';
+    launcherUrlDisplay.textContent = '';
+  }
 });
 
 remoteRegenToken.addEventListener('click', () => {
@@ -5963,6 +6003,10 @@ logSaveBtn.addEventListener('click', async () => {
         gridsquare: parkLocGrid || (logQrzInfo ? logQrzInfo.grid : ''),
         country: logQrzInfo ? logQrzInfo.country : '',
         comment: commentBase,
+        // Include activation context if activator mode is running
+        ...(appMode === 'activator' && activationActive && activatorParkRefs.length > 0
+          ? { mySig: 'POTA', mySigInfo: activatorParkRefs[0].ref }
+          : {}),
         // Only respot on the first callsign
         respot: ci === 0 && wantsRespot,
         wwffRespot: ci === 0 && wantsWwffRespot,
@@ -6785,6 +6829,20 @@ async function openSettingsDialog(tab) {
     populateRemoteURLs();
   }
   updateRemoteAudioSummary(s.remoteAudioInput, s.remoteAudioOutput);
+  // Remote Launcher
+  setEnableLauncher.checked = s.enableLauncher === true;
+  launcherConfig.classList.toggle('hidden', !s.enableLauncher);
+  if (s.enableLauncher) {
+    try {
+      const ips = await window.api.getLocalIPs();
+      const tsIp = ips.find(ip => ip.tailscale);
+      const lanIp = ips.find(ip => !ip.tailscale);
+      const ip = tsIp || lanIp;
+      if (ip) launcherUrlDisplay.textContent = 'https://' + ip.address + ':7301/';
+    } catch {}
+    launcherStatus.textContent = 'Installed';
+    launcherStatus.style.color = '#4ecca3';
+  }
   // Club Station Mode
   setClubMode.checked = s.clubMode === true;
   setClubCsvPath.value = s.clubCsvPath || '';
@@ -6932,6 +6990,7 @@ settingsSave.addEventListener('click', async () => {
   const remotePttTimeoutVal = parseInt(setRemotePttTimeout.value, 10) || 180;
   const remoteCwEnabledVal = setRemoteCwEnabled.checked;
   const cwKeyPortVal = setCwKeyPort.value || '';
+  const launcherEnabled = setEnableLauncher.checked;
   const clubModeEnabled = setClubMode.checked;
   const clubCsvPathVal = setClubCsvPath.value || '';
   // Audio comes from the active rig (resolved after selectedRig below)
@@ -7076,6 +7135,7 @@ settingsSave.addEventListener('click', async () => {
     remotePttTimeout: remotePttTimeoutVal,
     remoteCwEnabled: remoteCwEnabledVal,
     cwKeyPort: cwKeyPortVal,
+    enableLauncher: launcherEnabled,
     clubMode: clubModeEnabled,
     clubCsvPath: clubCsvPathVal,
     remoteAudioInput: selectedRig ? (selectedRig.remoteAudioInput || '') : '',
