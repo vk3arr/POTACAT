@@ -1804,7 +1804,7 @@
       });
       customCatBtnsEl.appendChild(btn);
     }
-    customCatSection.classList.toggle('hidden', !hasAny && !customCatEditing);
+    // Always show section — Edit button allows creating buttons from ECHOCAT
     // Re-render editor if open
     if (customCatEditing) renderCustomCatEditor();
   }

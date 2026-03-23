@@ -10047,6 +10047,10 @@ function saveCustomButtons() {
 }
 
 loadCustomButtons();
+// Migrate localStorage buttons to settings.json if not already synced
+if (customCatButtons.some(b => b.name || b.command)) {
+  window.api.saveSettings({ customCatButtons });
+}
 
 rigCustomSlots.forEach((slot, i) => {
   const nameInput = slot.querySelector('.rig-custom-name');
