@@ -2,6 +2,28 @@ const { app, BrowserWindow, ipcMain, Menu, dialog, Notification, screen, nativeI
 const path = require('path');
 const fs = require('fs');
 
+// --- Launcher-only mode: POTACAT.exe --launcher ---
+// Runs the lightweight HTTPS launcher server without any GUI.
+// Used by the Windows/macOS/Linux Startup to start/stop POTACAT remotely.
+// No external Node.js required — uses Electron's embedded runtime.
+if (process.argv.includes('--launcher')) {
+  const launcherScript = app.isPackaged
+    ? path.join(process.resourcesPath, 'scripts', 'launcher.js')
+    : path.join(__dirname, 'scripts', 'launcher.js');
+  // Prevent Electron from quitting when there are no windows
+  app.on('window-all-closed', (e) => { /* keep running */ });
+  app.whenReady().then(() => {
+    if (fs.existsSync(launcherScript)) {
+      require(launcherScript);
+      console.log('[Launcher] Running in headless mode on port 7301');
+    } else {
+      console.error('[Launcher] Script not found:', launcherScript);
+      app.quit();
+    }
+  });
+  return; // skip all GUI initialization below
+}
+
 // Prevent EPIPE crashes when stdout/stderr pipe is closed
 process.stdout?.on('error', () => {});
 process.stderr?.on('error', () => {});
@@ -6841,7 +6863,9 @@ app.whenReady().then(() => {
   ipcMain.handle('get-settings', () => ({ ...settings, appVersion: require('./package.json').version }));
   ipcMain.handle('get-rig-models', () => getModelList());
 
-  // --- Remote Launcher IPC (inline — no child process needed) ---
+  // --- Remote Launcher IPC ---
+  // Uses POTACAT.exe --launcher to run the launcher server at login.
+  // No external Node.js needed — Electron itself runs the launcher script.
   ipcMain.handle('install-launcher', () => {
     try {
       const os = require('os');
@@ -6849,25 +6873,7 @@ app.whenReady().then(() => {
       const isMac = process.platform === 'darwin';
       const configDir = app.getPath('userData');
       const configPath = path.join(configDir, 'launcher-config.json');
-      const launcherScript = app.isPackaged
-        ? path.join(process.resourcesPath, 'scripts', 'launcher.js')
-        : path.join(__dirname, 'scripts', 'launcher.js');
-
-      // Find a working Node.js — packaged app doesn't have 'node' in PATH
-      let nodeExe = 'node';
-      if (app.isPackaged) {
-        // Electron bundles Node — use its embedded binary path
-        // On Windows: POTACAT.exe can run JS via child_process but we need standalone node
-        // Best bet: check common Node.js install paths, or use the launcher.js via Electron's fork
-        const candidates = isWin ? [
-          'C:\\Program Files\\nodejs\\node.exe',
-          'C:\\Program Files (x86)\\nodejs\\node.exe',
-          path.join(process.env.LOCALAPPDATA || '', 'Programs', 'nodejs', 'node.exe'),
-        ] : ['/usr/bin/node', '/usr/local/bin/node', '/opt/homebrew/bin/node'];
-        for (const p of candidates) {
-          try { fs.accessSync(p, fs.constants.X_OK); nodeExe = p; break; } catch {}
-        }
-      }
+      const exePath = process.execPath; // POTACAT.exe (or electron in dev)
 
       // Load or create config
       let config = { port: 7301, https: true };
@@ -6877,21 +6883,21 @@ app.whenReady().then(() => {
       delete config.token;
       fs.writeFileSync(configPath, JSON.stringify(config, null, 2));
 
-      // Platform-specific auto-start
+      // Platform-specific auto-start — all use "POTACAT.exe --launcher"
       if (isWin) {
         const startupDir = path.join(process.env.APPDATA || '', 'Microsoft', 'Windows', 'Start Menu', 'Programs', 'Startup');
         const vbsPath = path.join(startupDir, 'POTACAT-Launcher.vbs');
-        fs.writeFileSync(vbsPath, `Set WshShell = CreateObject("WScript.Shell")\r\nWshShell.Run """${nodeExe}"" ""${launcherScript}""", 0, False\r\n`);
+        fs.writeFileSync(vbsPath, `Set WshShell = CreateObject("WScript.Shell")\r\nWshShell.Run """${exePath}"" --launcher", 0, False\r\n`);
       } else if (isMac) {
         const plistDir = path.join(os.homedir(), 'Library', 'LaunchAgents');
         fs.mkdirSync(plistDir, { recursive: true });
-        const plist = `<?xml version="1.0" encoding="UTF-8"?>\n<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">\n<plist version="1.0"><dict><key>Label</key><string>com.potacat.launcher</string><key>ProgramArguments</key><array><string>${nodeExe}</string><string>${launcherScript}</string></array><key>RunAtLoad</key><true/><key>KeepAlive</key><true/></dict></plist>`;
+        const plist = `<?xml version="1.0" encoding="UTF-8"?>\n<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">\n<plist version="1.0"><dict><key>Label</key><string>com.potacat.launcher</string><key>ProgramArguments</key><array><string>${exePath}</string><string>--launcher</string></array><key>RunAtLoad</key><true/><key>KeepAlive</key><true/></dict></plist>`;
         fs.writeFileSync(path.join(plistDir, 'com.potacat.launcher.plist'), plist);
         try { execSync(`launchctl load "${path.join(plistDir, 'com.potacat.launcher.plist')}"`, { stdio: 'pipe' }); } catch {}
       } else {
         const autostartDir = path.join(os.homedir(), '.config', 'autostart');
         fs.mkdirSync(autostartDir, { recursive: true });
-        fs.writeFileSync(path.join(autostartDir, 'potacat-launcher.desktop'), `[Desktop Entry]\nType=Application\nName=POTACAT Launcher\nExec=${nodeExe} ${launcherScript}\nHidden=false\nNoDisplay=true\nX-GNOME-Autostart-enabled=true\n`);
+        fs.writeFileSync(path.join(autostartDir, 'potacat-launcher.desktop'), `[Desktop Entry]\nType=Application\nName=POTACAT Launcher\nExec=${exePath} --launcher\nHidden=false\nNoDisplay=true\nX-GNOME-Autostart-enabled=true\n`);
       }
       return { ok: true };
     } catch (err) {
