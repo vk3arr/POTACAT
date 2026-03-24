@@ -546,7 +546,10 @@ async function connectCat() {
     cat.on('log', sendCatLog);
     // Enable raw Yaesu passthrough if model is a Yaesu rig (works around incomplete hamlib backends)
     const rigModel = getActiveRigModel();
-    if (rigModel && rigModel.brand === 'Yaesu') cat.setYaesuPassthrough(true);
+    if (rigModel && rigModel.brand === 'Yaesu') {
+      cat.setYaesuPassthrough(true);
+      if (rigModel.atuCmd) cat._atuCmd = rigModel.atuCmd;
+    }
     cat.on('status', (s) => {
       // Enrich disconnect events with last rigctld stderr
       if (!s.connected && rigctldStderr) {
@@ -569,7 +572,10 @@ async function connectCat() {
     cat.on('log', sendCatLog);
     // Enable raw Yaesu passthrough if model is a Yaesu rig
     const rigModelNet = getActiveRigModel();
-    if (rigModelNet && rigModelNet.brand === 'Yaesu') cat.setYaesuPassthrough(true);
+    if (rigModelNet && rigModelNet.brand === 'Yaesu') {
+      cat.setYaesuPassthrough(true);
+      if (rigModelNet.atuCmd) cat._atuCmd = rigModelNet.atuCmd;
+    }
     cat.on('status', (s) => {
       sendCatLog(`rigctld-net status: connected=${s.connected}${s.error ? ' error=' + s.error : ''}`);
       sendCatStatus(s);
