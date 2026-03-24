@@ -2293,34 +2293,6 @@ html, body {
   flex: 1;
   min-height: 0;
 }
-#ft8-band-bar {
-  display: flex;
-  gap: 4px;
-  padding: 6px 8px;
-  overflow-x: auto;
-  -webkit-overflow-scrolling: touch;
-  background: var(--bg-header);
-  border-bottom: 1px solid var(--border);
-  flex-shrink: 0;
-}
-.ft8-band-btn {
-  padding: 6px 12px;
-  border-radius: 6px;
-  border: 1px solid var(--border);
-  background: transparent;
-  color: var(--text);
-  font-size: 13px;
-  font-weight: 600;
-  white-space: nowrap;
-  cursor: pointer;
-  min-width: 36px;
-  text-align: center;
-}
-.ft8-band-btn.active {
-  background: var(--accent);
-  color: #000;
-  border-color: var(--accent);
-}
 #ft8-status-strip {
   display: flex;
   align-items: center;
@@ -2732,9 +2704,6 @@ html, body {
 [data-theme="light"] .ft8-row.ft8-directed .ft8-msg { color: #c62828; }
 [data-theme="light"] .ft8-row.ft8-tx { background: rgba(211, 47, 47, 0.12); }
 [data-theme="light"] .ft8-row.ft8-tx .ft8-msg { color: #c62828; }
-[data-theme="light"] #ft8-band-bar { background: var(--bg-header); }
-[data-theme="light"] .ft8-band-btn { border-color: #ccc; color: #6a6a80; }
-[data-theme="light"] .ft8-band-btn.active { border-color: var(--pota); color: var(--pota); background: rgba(78,204,163,0.1); }
 [data-theme="light"] #ft8-status-strip { background: var(--bg-card); border-bottom-color: #ddd; }
 [data-theme="light"] #ft8-control-bar { background: var(--bg-card); border-top-color: #ddd; }
 [data-theme="light"] .ft8-ctrl-btn { border-color: #ccc; }

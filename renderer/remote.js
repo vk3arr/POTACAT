@@ -289,15 +289,15 @@
   /** Update band button data-freq attributes for current mode */
   function updateBandFreqs() {
     const table = ft8Mode === 'FT2' ? FT2_BAND_FREQS : ft8Mode === 'FT4' ? FT4_BAND_FREQS : FT8_BAND_FREQS;
-    ft8BandBar.querySelectorAll('.ft8-band-btn').forEach(btn => {
-      const band = btn.dataset.band;
-      if (table[band]) btn.dataset.freq = table[band];
+    Array.from(ft8BandSelect.options).forEach(opt => {
+      const band = opt.value;
+      if (table[band]) opt.dataset.freq = table[band];
     });
   }
 
   // FT8 DOM refs
   const ft8View = document.getElementById('ft8-view');
-  const ft8BandBar = document.getElementById('ft8-band-bar');
+  const ft8BandSelect = document.getElementById('ft8-band-select');
   const ft8ModeSelect = document.getElementById('ft8-mode-select');
   const ft8RxTxBadge = document.getElementById('ft8-rx-tx-badge');
   const ft8CycleIndicator = document.getElementById('ft8-cycle-indicator');
@@ -2771,10 +2771,10 @@
         ft8Send({ type: 'jtcat-start', mode: ft8Mode });
       }
       // Tune radio to the active band with DIGU mode
-      var activeBandBtn = ft8BandBar.querySelector('.ft8-band-btn.active');
-      if (activeBandBtn) {
-        var freqKhz = parseInt(activeBandBtn.dataset.freq, 10);
-        ft8Send({ type: 'jtcat-set-band', band: activeBandBtn.dataset.band, freqKhz: freqKhz });
+      var selectedOpt = ft8BandSelect.options[ft8BandSelect.selectedIndex];
+      if (selectedOpt) {
+        var freqKhz = parseInt(selectedOpt.dataset.freq, 10);
+        ft8Send({ type: 'jtcat-set-band', band: selectedOpt.value, freqKhz: freqKhz });
       }
       ft8StartCountdown();
     } else if (tab === 'dir') {
@@ -4022,20 +4022,18 @@
     ft8Send({ type: 'jtcat-set-mode', mode: ft8Mode });
     ft8StartCountdown(); // restart with new cycle duration
     // Retune to the active band's new frequency for the selected mode
-    const activeBtn = ft8BandBar.querySelector('.ft8-band-btn.active');
-    if (activeBtn) {
-      const freqKhz = parseFloat(activeBtn.dataset.freq);
-      ft8Send({ type: 'jtcat-set-band', band: activeBtn.dataset.band, freqKhz });
+    const opt = ft8BandSelect.options[ft8BandSelect.selectedIndex];
+    if (opt) {
+      const freqKhz = parseFloat(opt.dataset.freq);
+      ft8Send({ type: 'jtcat-set-band', band: opt.value, freqKhz });
     }
   });
 
-  // --- Band bar ---
-  ft8BandBar.addEventListener('click', (e) => {
-    const btn = e.target.closest('.ft8-band-btn');
-    if (!btn) return;
-    const band = btn.dataset.band;
-    const freqKhz = parseFloat(btn.dataset.freq);
-    ft8BandBar.querySelectorAll('.ft8-band-btn').forEach(b => b.classList.toggle('active', b === btn));
+  // --- Band select ---
+  ft8BandSelect.addEventListener('change', () => {
+    const opt = ft8BandSelect.options[ft8BandSelect.selectedIndex];
+    const band = opt.value;
+    const freqKhz = parseFloat(opt.dataset.freq);
     ft8Send({ type: 'jtcat-set-band', band, freqKhz });
     // Clear decode log on band change
     ft8DecodeLog = [];

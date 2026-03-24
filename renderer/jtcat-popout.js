@@ -672,6 +672,11 @@
     cqFilterBtn.classList.toggle('active', cqFilter);
   });
 
+  document.getElementById('jp-clear').addEventListener('click', function() {
+    bandActivity.innerHTML = '<div class="jp-empty">Waiting for decodes...</div>';
+    myActivity.innerHTML = '<div class="jp-empty">No activity yet</div>';
+  });
+
   var cqModifierSelect = document.getElementById('jp-cq-modifier');
   cqBtn.addEventListener('click', function() {
     var mod = cqModifierSelect ? cqModifierSelect.value : '';

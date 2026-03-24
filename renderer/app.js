@@ -14000,7 +14000,7 @@ var waterfallCtx = jtcatWaterfall.getContext('2d');
 var waterfallAnimFrame = null;
 
 function jtcatWaterfallLoop() {
-  if (!jtcatRunning || !jtcatAnalyser) return;
+  if ((!jtcatRunning && !jtcatRemoteActive) || !jtcatAnalyser) return;
 
   try {
   var freqData = new Uint8Array(jtcatAnalyser.frequencyBinCount);
