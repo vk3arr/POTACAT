@@ -549,6 +549,8 @@ async function connectCat() {
     if (rigModel && rigModel.brand === 'Yaesu') {
       cat.setYaesuPassthrough(true);
       if (rigModel.atuCmd) cat._atuCmd = rigModel.atuCmd;
+      if (rigModel.minPower != null) cat._minPower = rigModel.minPower;
+      if (rigModel.maxPower != null) cat._maxPower = rigModel.maxPower;
     }
     cat.on('status', (s) => {
       // Enrich disconnect events with last rigctld stderr
@@ -575,6 +577,8 @@ async function connectCat() {
     if (rigModelNet && rigModelNet.brand === 'Yaesu') {
       cat.setYaesuPassthrough(true);
       if (rigModelNet.atuCmd) cat._atuCmd = rigModelNet.atuCmd;
+      if (rigModelNet.minPower != null) cat._minPower = rigModelNet.minPower;
+      if (rigModelNet.maxPower != null) cat._maxPower = rigModelNet.maxPower;
     }
     cat.on('status', (s) => {
       sendCatLog(`rigctld-net status: connected=${s.connected}${s.error ? ' error=' + s.error : ''}`);
@@ -611,6 +615,8 @@ async function connectCat() {
     if (serialModel && serialModel.digiMd != null) {
       cat._digiMd = serialModel.digiMd;
     }
+    if (serialModel && serialModel.minPower != null) cat._minPower = serialModel.minPower;
+    if (serialModel && serialModel.maxPower != null) cat._maxPower = serialModel.maxPower;
     cat.on('log', sendCatLog);
     cat.on('status', sendCatStatus);
     cat.on('frequency', sendCatFrequency);
@@ -2152,7 +2158,9 @@ function startJtcat(mode) {
   });
 
   ft8Engine.on('tx-start', (data) => {
-    console.log('[JTCAT] TX start — PTT on, message:', data.message);
+    const catState = cat ? `connected=${cat.connected}` : 'cat=null';
+    console.log(`[JTCAT] TX start — PTT on, message: ${data.message}, ${catState}`);
+    sendCatLog(`FT8 TX: ${data.message} freq=${data.freq}Hz slot=${data.slot} ${catState}`);
     handleRemotePtt(true);
     if (win && !win.isDestroyed()) {
       win.webContents.send('jtcat-tx-status', { state: 'tx', message: data.message, slot: data.slot });
@@ -2827,8 +2835,9 @@ function connectRemote() {
   remoteServer.on('set-atu', ({ on }) => {
     if (flexSdr()) {
       smartSdr.setAtu(on);
-    } else if (on && cat && cat.connected) {
-      cat.startTune(); // Yaesu/Kenwood/rigctld ATU
+    } else if (cat && cat.connected) {
+      if (on) cat.startTune();
+      else cat.stopTune();
     }
     _currentAtuState = on;
     broadcastRigState();
@@ -3674,6 +3683,9 @@ function handleRemotePtt(state) {
     // Non-Flex rig (serial or rigctld): use TX;/RX; or T 1/T 0
     if (cat && cat.connected) {
       cat.setTransmit(state);
+    } else if (state) {
+      console.warn('[PTT] Cannot key TX — CAT not connected');
+      sendCatLog('PTT FAILED: CAT not connected (TX audio may play but radio will not transmit)');
     }
   }
 

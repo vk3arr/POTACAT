@@ -1591,6 +1591,112 @@
     return el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.tagName === 'SELECT' || el.isContentEditable);
   }
 
+  // --- Bluetooth PTT (experimental) ---
+  // Attempts to catch Bluetooth headset button presses (e.g. Inrico B01/B02)
+  // via Media Session API. Requires active audio session to receive events.
+  var btPttEnabled = false;
+  var btPttAudioEl = null;
+  var btPttBtn = document.getElementById('so-bt-ptt');
+  var btPttStatus = document.getElementById('bt-ptt-status');
+
+  function btPttUpdateStatus(text) {
+    if (btPttStatus) btPttStatus.textContent = text;
+  }
+
+  function btPttToggle() {
+    if (!pttDown) pttStart(); else pttStop();
+  }
+
+  function btPttStart() {
+    if (btPttEnabled) return;
+    btPttEnabled = true;
+    if (btPttBtn) { btPttBtn.textContent = 'On'; btPttBtn.classList.add('active'); }
+
+    // --- Method 1: Silent audio loop for media session ---
+    // Android Chrome needs an active media session to deliver BT headset events.
+    // (Does NOT work on iOS — HFP TALK is consumed by CallKit at the system level.)
+    if (!btPttAudioEl) {
+      btPttAudioEl = document.createElement('audio');
+      btPttAudioEl.loop = true;
+      btPttAudioEl.volume = 0.01;
+      // Tiny silent WAV
+      btPttAudioEl.src = 'data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEARKwAABCxAgABAAgAZGF0YQAAAAA=';
+      btPttAudioEl.addEventListener('pause', function() {
+        if (!btPttEnabled) return;
+        btPttUpdateStatus('BT: audio pause');
+        btPttToggle();
+        setTimeout(function() { if (btPttEnabled && btPttAudioEl) btPttAudioEl.play().catch(function(){}); }, 200);
+      });
+    }
+    btPttAudioEl.play().catch(function() {
+      // Autoplay blocked — retry on touch
+      document.addEventListener('touchstart', function retry() {
+        if (btPttEnabled && btPttAudioEl) btPttAudioEl.play().catch(function(){});
+        document.removeEventListener('touchstart', retry);
+      }, { once: true });
+    });
+
+    // --- Method 2: Media Session API ---
+    // Android Chrome translates BT headset buttons to media session actions
+    if ('mediaSession' in navigator) {
+      try {
+        navigator.mediaSession.metadata = new MediaMetadata({ title: 'ECHOCAT PTT', artist: 'POTACAT' });
+        ['play', 'pause', 'stop', 'nexttrack', 'previoustrack'].forEach(function(action) {
+          try {
+            navigator.mediaSession.setActionHandler(action, function() {
+              if (!btPttEnabled) return;
+              btPttUpdateStatus('BT: ' + action);
+              btPttToggle();
+              if (btPttAudioEl) btPttAudioEl.play().catch(function(){});
+            });
+          } catch(e) {}
+        });
+      } catch(e) {}
+    }
+
+    // --- Method 3: Keyboard media key events ---
+    // Android translates BT HFP buttons to KEYCODE_MEDIA_PLAY_PAUSE → 'MediaPlayPause'
+    document.addEventListener('keydown', btPttKeyHandler);
+
+    btPttUpdateStatus('Listening...');
+    console.log('[BT PTT] Enabled — media session + keyboard listeners active');
+  }
+
+  function btPttKeyHandler(e) {
+    if (!btPttEnabled) return;
+    var mediaKeys = ['MediaPlayPause', 'MediaPlay', 'MediaPause', 'MediaStop',
+      'MediaTrackNext', 'MediaTrackPrevious', 'HeadsetHook'];
+    if (mediaKeys.indexOf(e.code) >= 0 || mediaKeys.indexOf(e.key) >= 0) {
+      e.preventDefault();
+      btPttUpdateStatus('BT key: ' + (e.code || e.key));
+      btPttToggle();
+    }
+  }
+
+  function btPttStop() {
+    btPttEnabled = false;
+    if (btPttBtn) { btPttBtn.textContent = 'Off'; btPttBtn.classList.remove('active'); }
+    if (btPttAudioEl) {
+      btPttAudioEl.pause();
+      btPttAudioEl.src = '';
+      btPttAudioEl = null;
+    }
+    if ('mediaSession' in navigator) {
+      ['play','pause','stop','nexttrack','previoustrack'].forEach(function(a) {
+        try { navigator.mediaSession.setActionHandler(a, null); } catch(e){}
+      });
+    }
+    document.removeEventListener('keydown', btPttKeyHandler);
+    btPttUpdateStatus('');
+    console.log('[BT PTT] Disabled');
+  }
+
+  if (btPttBtn) {
+    btPttBtn.addEventListener('click', function() {
+      if (btPttEnabled) btPttStop(); else btPttStart();
+    });
+  }
+
   estopBtn.addEventListener('click', () => {
     if (typeof ssbPlayingIdx !== 'undefined' && ssbPlayingIdx >= 0) stopSsbPlayback();
     pttDown = false;
@@ -4169,6 +4275,8 @@
     '-':'-....-','_':'..--.-'
   };
   var cwTextTimer = null;  // ID for cancelling in-progress playback
+  var cwTextOsc = null;    // oscillator for text sidetone (separate from paddle sidetone)
+  var cwTextGain = null;
 
   function playCwTextSidetone(text) {
     // Cancel any in-progress text sidetone
@@ -4203,37 +4311,60 @@
 
     if (elements.length === 0) return;
 
-    // Schedule playback using setTimeout chain (works well on mobile)
-    var unitMs = 1200 / cwWpm;
-    var idx = 0;
+    // Use Web Audio API scheduling for accurate timing (setTimeout is unreliable
+    // on mobile — causes garbled sidetone where V sounds like K, etc.)
+    var unitSec = 1.2 / cwWpm;
+    var ramp = 0.003; // 3ms attack/decay to avoid clicks
+    var now = cwAudioCtx.currentTime + 0.01; // small lookahead
+    var t = now;
 
-    function playNext() {
-      if (idx >= elements.length) {
-        handleCwSidetone(false);
-        cwIndicator.classList.remove('active');
-        cwTextTimer = null;
-        return;
-      }
-      var el = elements[idx++];
+    cwTextOsc = cwAudioCtx.createOscillator();
+    cwTextOsc.type = 'sine';
+    cwTextOsc.frequency.value = cwSidetoneFreq;
+    cwTextGain = cwAudioCtx.createGain();
+    cwTextGain.gain.setValueAtTime(0, now);
+    cwTextOsc.connect(cwTextGain);
+    cwTextGain.connect(cwAudioCtx.destination);
+    cwTextOsc.start(now);
+
+    for (var i = 0; i < elements.length; i++) {
+      var el = elements[i];
+      var dur = el.units * unitSec;
       if (el.tone) {
-        handleCwSidetone(true);
-        cwIndicator.classList.add('active');
-      } else {
-        handleCwSidetone(false);
-        cwIndicator.classList.remove('active');
+        // Ramp up at start of tone, hold, ramp down at end
+        cwTextGain.gain.setValueAtTime(0, t);
+        cwTextGain.gain.linearRampToValueAtTime(cwSidetoneVol, t + ramp);
+        cwTextGain.gain.setValueAtTime(cwSidetoneVol, t + dur - ramp);
+        cwTextGain.gain.linearRampToValueAtTime(0, t + dur);
       }
-      cwTextTimer = setTimeout(playNext, el.units * unitMs);
+      t += dur;
     }
-    playNext();
+
+    cwTextOsc.stop(t + 0.01);
+    cwIndicator.classList.add('active');
+
+    // Clean up after playback completes
+    var totalMs = (t - now) * 1000 + 50;
+    cwTextTimer = setTimeout(function() {
+      cwTextOsc = null;
+      cwTextGain = null;
+      cwTextTimer = null;
+      cwIndicator.classList.remove('active');
+    }, totalMs);
   }
 
   function stopCwTextSidetone() {
+    if (cwTextOsc) {
+      try { cwTextOsc.stop(); } catch(e) {}
+      cwTextOsc = null;
+      cwTextGain = null;
+    }
     if (cwTextTimer) {
       clearTimeout(cwTextTimer);
       cwTextTimer = null;
-      handleCwSidetone(false);
-      cwIndicator.classList.remove('active');
     }
+    handleCwSidetone(false);
+    cwIndicator.classList.remove('active');
   }
 
   function sendCwText(text) {
@@ -4623,7 +4754,11 @@
         ecUpdateMidiStatus(inputs.length + ' device(s) found', '');
       } else {
         soMidiDevice.innerHTML = '<option value="">— No MIDI devices —</option>';
-        ecUpdateMidiStatus('MIDI access OK but 0 inputs, ' + outputs.length + ' outputs. Check browser MIDI permission.', '');
+        var isAndroid = /android/i.test(navigator.userAgent);
+        var hint = isAndroid
+          ? 'No MIDI inputs found. Try: connect device before loading page, then tap Refresh.'
+          : 'MIDI access OK but 0 inputs. Connect device and tap Refresh.';
+        ecUpdateMidiStatus(hint, '');
       }
     } catch (err) {
       console.warn('Web MIDI error:', err);

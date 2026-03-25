@@ -13339,18 +13339,61 @@ function onJtcatDecodeClick(e) {
   var row = e.currentTarget;
   var df = parseInt(row.dataset.df, 10);
   var text = row.dataset.text || '';
+  var upper = text.toUpperCase();
+  var myCall = getMyCallsign();
+
   // Set RX freq to this decode's offset
   jtcatRxFreq = df;
   jtcatRxFreqInput.value = df;
   jtcatRxFreqLabel.textContent = df + ' Hz';
   if (jtcatRunning) window.api.jtcatSetRxFreq(df);
 
-  // If it's a CQ, start a QSO
-  var cqMatch = text.match(/^CQ\s+(?:(\w+)\s+)?([A-Z0-9/]+)\s+([A-R]{2}\d{2})/i);
+  // If it's a CQ, start a QSO (reply to their CQ)
+  var cqMatch = upper.match(/^CQ\s+(?:(\w+)\s+)?([A-Z0-9/]+)\s+([A-R]{2}\d{2})/);
   if (cqMatch) {
-    var theirCall = cqMatch[2].toUpperCase();
-    var theirGrid = cqMatch[3].toUpperCase();
+    var theirCall = cqMatch[2];
+    var theirGrid = cqMatch[3];
     jtcatStartQso(theirCall, theirGrid, df);
+  }
+  // If it's directed at me (MYCALL THEIRCALL PAYLOAD), pick up the QSO
+  else if (myCall) {
+    var parts = upper.split(/\s+/);
+    if (parts.length >= 2 && parts[0] === myCall) {
+      var fromCall = parts[1];
+      var payload = parts[2] || '';
+      var grid = /^[A-R]{2}[0-9]{2}$/.test(payload) ? payload : '';
+      var rptMatch = payload.match(/^R?([+-]\d{2})$/);
+      var hasRR73 = payload === 'RR73' || payload === 'RRR' || payload === '73';
+      var snr = parseInt(row.dataset.db, 10) || 0;
+
+      if (hasRR73) {
+        // QSO complete — just send 73 back
+        var txMsg = fromCall + ' ' + myCall + ' 73';
+        jtcatQso = { mode: 'reply', call: fromCall, grid: '', phase: '73',
+          txMsg: txMsg, report: null, sentReport: null, myCall: myCall, myGrid: getMyGrid(), txRetries: 0 };
+        jtcatSetTxAndSend(txMsg);
+        jtcatEnableTxUi();
+        renderJtcatQsoTracker();
+      } else if (rptMatch) {
+        // They sent us a report — reply with R+our-report
+        var ourReport = snr >= 0 ? '+' + String(snr).padStart(2, '0') : String(snr).padStart(3, '0');
+        var txMsg = fromCall + ' ' + myCall + ' R' + ourReport;
+        jtcatQso = { mode: 'reply', call: fromCall, grid: grid, phase: 'r+report',
+          txMsg: txMsg, report: rptMatch[1], sentReport: ourReport, myCall: myCall, myGrid: getMyGrid(), txRetries: 0 };
+        jtcatSetTxAndSend(txMsg);
+        jtcatEnableTxUi();
+        renderJtcatQsoTracker();
+      } else {
+        // They sent grid or other — start normal reply QSO
+        jtcatStartQso(fromCall, grid, df);
+      }
+      // Set TX freq to their freq
+      jtcatTxFreq = df;
+      jtcatTxFreqInput.value = df;
+      jtcatTxFreqLabel.textContent = 'TX: ' + df + ' Hz';
+      if (jtcatRunning) window.api.jtcatSetTxFreq(df);
+      console.log('[JTCAT] Picked up QSO with', fromCall, 'payload:', payload);
+    }
   }
   renderJtcatDecodes();
 }
@@ -14257,7 +14300,7 @@ async function playJtcatTxAudio(data) {
         finishTx();
       }
     }, safetyDur * 1000);
-    console.log('[JTCAT] TX audio playing, offset=' + offsetSec.toFixed(1) + 's, dur=' + durationSec.toFixed(1) + 's, device:', outputDeviceId || 'default');
+    console.log('[JTCAT] TX audio playing, samples=' + samples.length + ', bufDur=' + buffer.duration.toFixed(2) + 's, offset=' + offsetSec.toFixed(1) + 's, dur=' + durationSec.toFixed(1) + 's, device:', outputDeviceId || 'default');
   } catch (err) {
     jtcatTxPlaying = false;
     window.api.jtcatTxComplete();
