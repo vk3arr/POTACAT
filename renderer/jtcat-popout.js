@@ -516,6 +516,15 @@
     });
   }
 
+  // Radio frequency display
+  var radioFreqEl = document.getElementById('jp-radio-freq');
+  if (window.api.onCatFrequency) {
+    window.api.onCatFrequency(function(hz) {
+      if (!radioFreqEl || !hz) return;
+      radioFreqEl.textContent = (hz / 1000000).toFixed(3) + ' MHz';
+    });
+  }
+
   window.api.onJtcatTxStatus(function(data) {
     transmitting = data.state === 'tx';
     rxTxEl.textContent = transmitting ? 'TX' : 'RX';

@@ -2837,6 +2837,10 @@
     pttBtn.style.display = tab === 'ft8' ? 'none' : '';
     // Hide entire bottom bar (Audio/PTT/STOP) on FT8 tab — no voice audio needed
     bottomBar.style.display = tab === 'ft8' ? 'none' : '';
+    // Hide Scan button and freq step arrows on FT8 tab — not relevant
+    scanBtn.style.display = tab === 'ft8' ? 'none' : '';
+    var freqStepBtns = document.getElementById('freq-step-btns');
+    if (freqStepBtns) freqStepBtns.style.display = tab === 'ft8' ? 'none' : '';
     // Hide CW/SSB panels on tabs where they're not relevant
     updateCwPanelVisibility();
     updateSsbPanelVisibility();
@@ -3814,10 +3818,15 @@
     log.appendChild(sep);
 
     if (results.length === 0) {
-      if (!ft8Transmitting) {
+      if (ft8Transmitting && ft8TxMsg) {
+        const row = document.createElement('div');
+        row.className = 'ft8-row ft8-tx';
+        row.innerHTML = '<span class="ft8-db">TX</span><span class="ft8-msg">' + esc(ft8TxMsg) + '</span>';
+        log.appendChild(row);
+      } else if (!ft8Transmitting) {
         const row = document.createElement('div');
         row.className = 'ft8-row';
-        row.innerHTML = '<span class="ft8-time">' + esc(time) + '</span><span class="ft8-msg" style="color:#666">No decodes</span>';
+        row.innerHTML = '<span class="ft8-msg" style="color:#666">No decodes</span>';
         log.appendChild(row);
       }
     } else {
@@ -3842,13 +3851,15 @@
           }
         }
 
-        // Apply CQ filter — always show CQ, 73, directed-at-me, and hunted calls
-        if (ft8CqFilter && !isCq && !is73 && !isDirected && !isHunt) return;
+        // Always show decodes from/to our active QSO partner
+        const isQsoPartner = ft8QsoState && ft8QsoState.call && upper.indexOf(ft8QsoState.call.toUpperCase()) >= 0;
+
+        // Apply CQ filter — always show CQ, 73, directed-at-me, hunted, and QSO partner
+        if (ft8CqFilter && !isCq && !is73 && !isDirected && !isHunt && !isQsoPartner) return;
 
         const row = document.createElement('div');
         row.className = 'ft8-row' + (isCq ? ' ft8-cq' : '') + (isDirected ? ' ft8-directed' : '') + (isHunt ? ' ft8-hunt' : '');
         row.innerHTML =
-          '<span class="ft8-time">' + esc(time) + '</span>' +
           '<span class="ft8-db">' + (d.db >= 0 ? '+' : '') + d.db + '</span>' +
           '<span class="ft8-dt">' + (d.dt != null ? (d.dt >= 0 ? '+' : '') + d.dt.toFixed(1) : '') + '</span>' +
           '<span class="ft8-df">' + d.df + '</span>' +
@@ -3865,16 +3876,10 @@
 
   function ft8AddTxRow(message) {
     const log = ft8DecodeLogEl;
-    const now = new Date();
-    const time = String(now.getUTCHours()).padStart(2, '0') + ':' +
-                 String(now.getUTCMinutes()).padStart(2, '0') + ':' +
-                 String(now.getUTCSeconds()).padStart(2, '0');
     const row = document.createElement('div');
     row.className = 'ft8-row ft8-tx';
     row.innerHTML =
-      '<span class="ft8-time">' + esc(time) + '</span>' +
       '<span class="ft8-db">TX</span>' +
-      '<span class="ft8-df">--</span>' +
       '<span class="ft8-msg">' + esc(message) + '</span>';
     log.appendChild(row);
     log.scrollTop = log.scrollHeight;
@@ -3988,7 +3993,8 @@
     ft8CqBtn.textContent = inQso ? (ft8QsoState.call || 'QSO') : 'CQ';
   }
 
-  // --- Countdown timer ---
+  // --- Countdown timer + progress bar ---
+  var ft8CycleBar = document.getElementById('ft8-cycle-bar');
   function ft8StartCountdown() {
     if (ft8CountdownTimer) clearInterval(ft8CountdownTimer);
     const cycleSec = ft8Mode === 'FT2' ? 3.8 : ft8Mode === 'FT4' ? 7.5 : 15;
@@ -3996,13 +4002,16 @@
       const now = Date.now() / 1000;
       const inCycle = now % cycleSec;
       const remaining = cycleSec - inCycle;
+      const pct = (inCycle / cycleSec) * 100;
       ft8Countdown.textContent = remaining.toFixed(0) + 's';
+      if (ft8CycleBar) ft8CycleBar.style.width = pct + '%';
     }, 250);
   }
 
   function ft8StopCountdown() {
     if (ft8CountdownTimer) { clearInterval(ft8CountdownTimer); ft8CountdownTimer = null; }
     ft8Countdown.textContent = '--';
+    if (ft8CycleBar) ft8CycleBar.style.width = '0%';
   }
 
   // --- Waterfall rendering ---
