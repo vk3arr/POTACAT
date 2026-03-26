@@ -420,6 +420,41 @@ test('CIV parse mode response', () => {
   assert.strictEqual(mode, 'USB');
 });
 
+test('CIV setFilterWidth uses pending mode from setMode, not stale poll', () => {
+  const { codec, writes } = captureWrites(CivCodec, IC7300_MODEL);
+  // setMode FT8 — should store pendingModeByte = 0x01 (USB) + dataMode
+  codec.setMode('FT8', 14074000);
+  writes.length = 0; // clear mode writes
+  // setFilterWidth — should use 0x01 (pending), not fall back to 0x03 (CW)
+  codec.setFilterWidth(3000);
+  const hex = writes[0];
+  // cmd 0x06, mode=0x01 (USB), filter=0x01 (wide)
+  assert.ok(hex.includes('060101'), `Expected mode 01 filter 01, got: ${hex}`);
+  // Should re-send data mode ON after filter (since cmd 0x06 resets it)
+  assert.ok(writes.length >= 2, `Expected data mode re-send, got ${writes.length} writes`);
+  const dmHex = writes[1];
+  assert.ok(dmHex.includes('1a060101'), `Expected data mode ON re-send, got: ${dmHex}`);
+});
+
+test('CIV setFilterWidth skips when no mode known', () => {
+  const { codec, writes } = captureWrites(CivCodec, IC7300_MODEL);
+  // No setMode called, _lastModeByte is null, _pendingModeByte is null
+  codec.setFilterWidth(3000);
+  assert.strictEqual(writes.length, 0, 'Should not send filter when mode unknown');
+});
+
+test('CIV setFilterWidth narrow uses pending CW mode', () => {
+  const { codec, writes } = captureWrites(CivCodec, IC7300_MODEL);
+  codec.setMode('CW', 14000000);
+  writes.length = 0;
+  codec.setFilterWidth(400); // narrow
+  const hex = writes[0];
+  // cmd 0x06, mode=0x03 (CW), filter=0x03 (narrow)
+  assert.ok(hex.includes('060303'), `Expected CW mode 03 filter 03, got: ${hex}`);
+  // CW has no data mode — should NOT re-send data mode
+  assert.strictEqual(writes.length, 1, 'CW should not re-send data mode');
+});
+
 // =========================================================================
 console.log('\n=== FTdx3000 ATU ===');
 
