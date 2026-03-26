@@ -2789,6 +2789,11 @@ function connectRemote() {
     settings.catTarget = rig.catTarget;
     settings.remoteAudioInput = rig.remoteAudioInput || '';
     settings.remoteAudioOutput = rig.remoteAudioOutput || '';
+    // Per-rig CW key port
+    if (rig.cwKeyPort !== undefined) {
+      settings.cwKeyPort = rig.cwKeyPort || '';
+      connectCwKeyPort();
+    }
     saveSettings(settings);
     if (!settings.enableWsjtx) connectCat();
     connectSmartSdr();
@@ -7225,6 +7230,9 @@ app.whenReady().then(() => {
 
     settings = { ...settings, ...newSettings };
     saveSettings(settings);
+    // Reconnect CW key port if it changed (works for both partial and full saves)
+    if (has('cwKeyPort')) connectCwKeyPort();
+
     // Only reconnect CAT / refresh spots for full settings saves
     if (!isPartialSave) {
       if (!settings.enableWsjtx) connectCat();

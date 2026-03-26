@@ -750,6 +750,7 @@ async function openCatPopover(anchor) {
         catTarget: rig.catTarget,
         remoteAudioInput: rig.remoteAudioInput || '',
         remoteAudioOutput: rig.remoteAudioOutput || '',
+        cwKeyPort: rig.cwKeyPort || '',
       });
       activeRigName = rig.name || '';
       closeCatPopover();
@@ -1448,6 +1449,8 @@ async function openRigEditor(mode, rigId) {
       if (rigModelSelect) rigModelSelect.value = rig.model || '';
       await populateRadioSection(rig.catTarget);
       await populateRigAudioDevices(rig.remoteAudioInput, rig.remoteAudioOutput);
+      // Restore per-rig CW key port
+      if (setCwKeyPort && rig.cwKeyPort) setCwKeyPort.value = rig.cwKeyPort;
     }
   } else {
     rigEditorTitle.textContent = 'Add Rig';
@@ -1494,6 +1497,7 @@ rigSaveBtn.addEventListener('click', async () => {
 
   const rigAudioIn = rigRemoteAudioInput.value || '';
   const rigAudioOut = rigRemoteAudioOutput.value || '';
+  const rigCwKeyPortVal = setCwKeyPort ? setCwKeyPort.value || '' : '';
 
   if (rigEditorMode === 'edit' && editingRigId) {
     const rig = currentRigs.find(r => r.id === editingRigId);
@@ -1503,6 +1507,7 @@ rigSaveBtn.addEventListener('click', async () => {
       rig.catTarget = catTarget;
       rig.remoteAudioInput = rigAudioIn;
       rig.remoteAudioOutput = rigAudioOut;
+      rig.cwKeyPort = rigCwKeyPortVal;
     }
   } else {
     const newRig = {
@@ -1512,6 +1517,7 @@ rigSaveBtn.addEventListener('click', async () => {
       catTarget,
       remoteAudioInput: rigAudioIn,
       remoteAudioOutput: rigAudioOut,
+      cwKeyPort: rigCwKeyPortVal,
     };
     currentRigs.push(newRig);
   }
