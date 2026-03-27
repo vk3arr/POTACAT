@@ -5633,7 +5633,7 @@ function render() {
       sourceTd.setAttribute('data-col', 'source');
       const sourceBadge = document.createElement('span');
       sourceBadge.className = 'source-badge source-badge-' + (s.source || 'pota');
-      sourceBadge.textContent = SOURCE_LABELS[s.source] || s.source || '';
+      sourceBadge.textContent = (s.source === 'cwspots' && s.cwClub && s.cwClub !== 'CW') ? s.cwClub : (SOURCE_LABELS[s.source] || s.source || '');
       sourceTd.appendChild(sourceBadge);
       cellMap.set('source', sourceTd);
 

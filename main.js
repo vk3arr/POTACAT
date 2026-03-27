@@ -114,7 +114,7 @@ let rigctldProc = null;
 let cluster = null; // legacy — replaced by clusterClients Map
 let clusterSpots = []; // streaming DX cluster spots (FIFO, max 500)
 let clusterFlushTimer = null; // throttle timer for cluster → renderer updates
-let cwSpotsClient = null;
+let cwSpotsClients = new Map(); // club → DxClusterClient (one per checked club, or single for all)
 let cwSpots = []; // streaming CW club spots (FIFO, max 500)
 let cwSpotsFlushTimer = null; // throttle timer for CW spots → renderer updates
 let rbn = null;
@@ -895,56 +895,56 @@ function connectCwSpots() {
   if (!settings.enableCwSpots || !settings.myCallsign) return;
   const host = settings.cwSpotsHost || 'rbn.telegraphy.de';
   const port = settings.cwSpotsPort || 7000;
-  const preset = CW_SPOTS_PRESETS.find(p => p.host === host && p.port === port);
-  // Build postLogin commands — filter by selected clubs if any
   const clubs = settings.cwSpotsClubs || [];
-  let postLogin;
-  if (preset && preset.postLogin) {
-    postLogin = [...preset.postLogin];
-    // Replace generic 'set/clubs' with club-specific filter if user selected clubs
-    if (clubs.length > 0) {
-      const clubIdx = postLogin.indexOf('set/clubs');
-      if (clubIdx !== -1) postLogin[clubIdx] = 'set/clubs ' + clubs.join(',').toLowerCase();
-    }
-  } else {
-    postLogin = clubs.length > 0
-      ? ['set/clubs ' + clubs.join(',').toLowerCase(), 'set/nodupes']
-      : ['set/clubs', 'set/nodupes'];
-  }
   const myPos = gridToLatLon(settings.grid);
   const myEntity = ctyDb ? resolveCallsign(settings.myCallsign, ctyDb) : null;
+  const isMainServer = host === 'rbn.telegraphy.de';
 
-  cwSpotsClient = new DxClusterClient();
-  cwSpotsClient.on('spot', (raw) => {
-    const spot = buildClusterSpot(raw, myPos, myEntity);
-    spot.source = 'cwspots'; // override source
-    // Dedup by callsign+band
-    const idx = cwSpots.findIndex(s => s.callsign === spot.callsign && s.band === spot.band);
-    if (idx !== -1) cwSpots.splice(idx, 1);
-    cwSpots.push(spot);
-    if (cwSpots.length > 500) cwSpots = cwSpots.slice(-500);
-    // Throttle flush to renderer
-    if (!cwSpotsFlushTimer) {
-      cwSpotsFlushTimer = setTimeout(() => {
-        cwSpotsFlushTimer = null;
-        sendMergedSpots();
-      }, 2000);
-    }
+  // Per-club connections: one per checked club so we can tag spots with the club name.
+  // rbn.telegraphy.de supports SSIDs (K3SBP-1, -2) for multiple filter sets.
+  // If no clubs selected or non-main server, use single connection for all.
+  const clubList = (isMainServer && clubs.length > 0) ? clubs : [null];
+
+  clubList.forEach((club, i) => {
+    const client = new DxClusterClient();
+    const clubTag = club || 'CW';
+    const ssid = club ? `-${i + 1}` : '';
+    const postLogin = isMainServer
+      ? [club ? `set/clubs ${club.toLowerCase()}` : 'set/clubs', 'set/nodupes']
+      : [];
+
+    client.on('spot', (raw) => {
+      const spot = buildClusterSpot(raw, myPos, myEntity);
+      spot.source = 'cwspots';
+      spot.cwClub = clubTag; // tag with club name for badge display
+      // Dedup by callsign+band
+      const idx = cwSpots.findIndex(s => s.callsign === spot.callsign && s.band === spot.band);
+      if (idx !== -1) cwSpots.splice(idx, 1);
+      cwSpots.push(spot);
+      if (cwSpots.length > 500) cwSpots = cwSpots.slice(-500);
+      if (!cwSpotsFlushTimer) {
+        cwSpotsFlushTimer = setTimeout(() => {
+          cwSpotsFlushTimer = null;
+          sendMergedSpots();
+        }, 2000);
+      }
+    });
+    client.on('status', (s) => {
+      sendCatLog(`[CW Spots${club ? ' ' + club : ''}] ${s.connected ? 'Connected to' : 'Disconnected from'} ${host}:${port}`);
+      if (win && !win.isDestroyed()) win.webContents.send('cw-spots-status', s);
+    });
+    client.connect({ host, port, callsign: settings.myCallsign + ssid, postLogin });
+    cwSpotsClients.set(clubTag, client);
   });
-  cwSpotsClient.on('status', (s) => {
-    sendCatLog(`[CW Spots] ${s.connected ? 'Connected to' : 'Disconnected from'} ${host}:${port}`);
-    if (win && !win.isDestroyed()) win.webContents.send('cw-spots-status', s);
-  });
-  cwSpotsClient.connect({ host, port, callsign: settings.myCallsign, postLogin });
 }
 
 function disconnectCwSpots() {
   if (cwSpotsFlushTimer) { clearTimeout(cwSpotsFlushTimer); cwSpotsFlushTimer = null; }
-  if (cwSpotsClient) {
-    cwSpotsClient.disconnect();
-    cwSpotsClient.removeAllListeners();
-    cwSpotsClient = null;
+  for (const [, client] of cwSpotsClients) {
+    client.disconnect();
+    client.removeAllListeners();
   }
+  cwSpotsClients.clear();
   cwSpots = [];
 }
 
@@ -8550,7 +8550,8 @@ function gracefulCleanup() {
   if (cat) try { cat.disconnect(); } catch {}
   for (const [, entry] of clusterClients) { try { entry.client.disconnect(); } catch {} }
   clusterClients.clear();
-  if (cwSpotsClient) try { cwSpotsClient.disconnect(); } catch {}
+  for (const [, c] of cwSpotsClients) { try { c.disconnect(); } catch {} }
+  cwSpotsClients.clear();
   if (rbn) try { rbn.disconnect(); } catch {}
   try { disconnectWsjtx(); } catch {}
   try { disconnectSmartSdr(); } catch {}
