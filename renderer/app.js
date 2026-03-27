@@ -2943,13 +2943,47 @@ async function populateRemoteURLs() {
   try {
     const ips = await window.api.getLocalIPs();
     const port = setRemotePort.value || 7300;
-    remoteUrlDisplay.innerHTML = ips.map(ip => {
+    remoteUrlDisplay.innerHTML = '';
+    for (const ip of ips) {
       if (ip.tailscale && ip.tailscaleHostname) {
-        return `<div><strong style="color:#4ecca3;">Tailscale:</strong> <span style="cursor:pointer;text-decoration:underline;" title="Click to copy" onclick="navigator.clipboard.writeText('https://${ip.tailscaleHostname}:${port}')">https://${ip.tailscaleHostname}:${port}</span> <span style="font-size:10px;color:#888;">(click to copy)</span></div>`
-          + `<div style="color:#888;font-size:11px;margin-left:12px;">IP: https://${ip.address}:${port}</div>`;
+        const url = `https://${ip.tailscaleHostname}:${port}`;
+        const row = document.createElement('div');
+        const label = document.createElement('strong');
+        label.style.color = '#4ecca3';
+        label.textContent = 'Tailscale: ';
+        const link = document.createElement('span');
+        link.textContent = url;
+        link.style.cssText = 'cursor:pointer;text-decoration:underline;';
+        link.title = 'Click to copy';
+        const hint = document.createElement('span');
+        hint.style.cssText = 'font-size:10px;color:#888;margin-left:6px;';
+        hint.textContent = '(click to copy)';
+        link.addEventListener('click', () => {
+          navigator.clipboard.writeText(url).then(() => {
+            hint.textContent = 'Copied!';
+            setTimeout(() => { hint.textContent = '(click to copy)'; }, 1500);
+          });
+        });
+        row.appendChild(label);
+        row.appendChild(link);
+        row.appendChild(hint);
+        remoteUrlDisplay.appendChild(row);
+        const ipRow = document.createElement('div');
+        ipRow.style.cssText = 'color:#888;font-size:11px;margin-left:12px;';
+        ipRow.textContent = `IP: https://${ip.address}:${port}`;
+        remoteUrlDisplay.appendChild(ipRow);
+      } else {
+        const row = document.createElement('div');
+        row.textContent = `https://${ip.address}:${port}`;
+        if (ip.tailscale) {
+          const tag = document.createElement('strong');
+          tag.style.color = '#4ecca3';
+          tag.textContent = '(Tailscale) ';
+          row.prepend(tag);
+        }
+        remoteUrlDisplay.appendChild(row);
       }
-      return `<div>${ip.tailscale ? '<strong style="color:#4ecca3;">(Tailscale)</strong> ' : ''}https://${ip.address}:${port}</div>`;
-    }).join('');
+    }
   } catch {}
 }
 
