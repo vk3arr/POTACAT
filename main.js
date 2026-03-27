@@ -2629,8 +2629,15 @@ function connectRemote() {
     if (cwKeyPort && cwKeyPort.isOpen) {
       cwKeyPort.set({ dtr: false }, () => {});
     }
-    // Destroy audio window AFTER PTT cleanup to prevent audio artifacts triggering VOX
+    // Destroy audio window to stop all outgoing audio (prevents VOX re-trigger)
     destroyRemoteAudioWindow();
+    // Delayed safety TX-off: VOX on some radios (e.g. IC-7300 USB audio) can re-trigger
+    // from audio artifacts when the WebRTC stream closes. Send TX-off again after a short
+    // delay to catch any VOX re-key that happened during audio teardown.
+    setTimeout(() => {
+      if (cat && cat.connected) cat.setTransmit(false);
+      if (smartSdr && smartSdr.connected) smartSdr.setTransmit(false);
+    }, 500);
     // Safety: disable JTCAT TX if phone was driving a QSO
     if (ft8Engine && remoteJtcatQso) {
       ft8Engine._txEnabled = false;
