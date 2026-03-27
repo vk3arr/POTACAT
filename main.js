@@ -1512,10 +1512,13 @@ async function saveQsoRecord(qsoData) {
     }
   }
 
-  // Update worked parks set when a POTA park is logged (live "new-to-me" update)
-  const loggedParkRef = (qsoData.sig === 'POTA' && qsoData.sigInfo) ? qsoData.sigInfo.toUpperCase() : '';
+  // Update worked parks set when a POTA/WWFF park is logged (live "new-to-me" update)
+  const loggedParkRef = qsoData.potaRef
+    || qsoData.wwffRef
+    || ((qsoData.sig === 'POTA' || qsoData.sig === 'WWFF') && qsoData.sigInfo ? qsoData.sigInfo.toUpperCase() : '');
   if (loggedParkRef && !workedParks.has(loggedParkRef)) {
     workedParks.set(loggedParkRef, { reference: loggedParkRef });
+    saveLocalWorkedPark(loggedParkRef); // persist to disk
     if (win && !win.isDestroyed()) {
       win.webContents.send('worked-parks', [...workedParks.entries()]);
     }
@@ -4601,26 +4604,55 @@ function loadWorkedQsos() {
 }
 
 // --- Worked parks tracking ---
+
+// Supplemental file for parks worked via POTACAT (persists across restarts)
+const WORKED_PARKS_LOCAL_PATH = path.join(app.getPath('userData'), 'worked-parks-local.json');
+
+function loadLocalWorkedParks() {
+  try {
+    if (fs.existsSync(WORKED_PARKS_LOCAL_PATH)) {
+      const data = JSON.parse(fs.readFileSync(WORKED_PARKS_LOCAL_PATH, 'utf-8'));
+      return Array.isArray(data) ? data : [];
+    }
+  } catch {}
+  return [];
+}
+
+function saveLocalWorkedPark(ref) {
+  try {
+    const existing = loadLocalWorkedParks();
+    if (!existing.includes(ref)) {
+      existing.push(ref);
+      fs.writeFileSync(WORKED_PARKS_LOCAL_PATH, JSON.stringify(existing));
+    }
+  } catch (err) {
+    console.error('Failed to save local worked park:', err.message);
+  }
+}
+
 function loadWorkedParks() {
   if (!settings.potaParksPath) {
     workedParks = new Map();
-    if (win && !win.isDestroyed()) {
-      win.webContents.send('worked-parks', []);
+  } else {
+    try {
+      workedParks = parsePotaParksCSV(settings.potaParksPath);
+    } catch (err) {
+      console.error('Failed to parse POTA parks CSV:', err.message);
+      workedParks = new Map();
     }
-    return;
   }
-  try {
-    workedParks = parsePotaParksCSV(settings.potaParksPath);
-    if (win && !win.isDestroyed()) {
-      // Serialize Map as array of [key, value] pairs
-      win.webContents.send('worked-parks', [...workedParks.entries()]);
+  // Merge in parks worked via POTACAT's own logger (persisted locally)
+  const localParks = loadLocalWorkedParks();
+  for (const ref of localParks) {
+    if (!workedParks.has(ref)) {
+      workedParks.set(ref, { reference: ref });
     }
-    // Push to ECHOCAT phone
-    if (remoteServer && remoteServer.running) {
-      remoteServer.sendWorkedParks([...workedParks.keys()]);
-    }
-  } catch (err) {
-    console.error('Failed to parse POTA parks CSV:', err.message);
+  }
+  if (win && !win.isDestroyed()) {
+    win.webContents.send('worked-parks', [...workedParks.entries()]);
+  }
+  if (remoteServer && remoteServer.running) {
+    remoteServer.sendWorkedParks([...workedParks.keys()]);
   }
 }
 
