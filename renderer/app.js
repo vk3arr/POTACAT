@@ -2300,9 +2300,11 @@ setEnableCwSpots.addEventListener('change', () => {
 (function() {
   const preset = document.getElementById('set-cwspots-preset');
   const custom = document.getElementById('cwspots-custom-fields');
+  const clubs = document.getElementById('cwspots-clubs');
   if (preset) {
     preset.addEventListener('change', () => {
       custom.classList.toggle('hidden', preset.value !== 'custom');
+      if (clubs) clubs.style.display = preset.value === 'rbn.telegraphy.de:7000' ? '' : 'none';
     });
   }
 })();
@@ -6821,6 +6823,16 @@ async function openSettingsDialog(tab) {
     }
   }
   if (cwSpotsConfig) cwSpotsConfig.classList.toggle('hidden', !s.enableCwSpots);
+  // Restore club checkboxes
+  const savedClubs = s.cwSpotsClubs || [];
+  document.querySelectorAll('#cwspots-clubs input[data-club]').forEach(cb => {
+    cb.checked = savedClubs.includes(cb.dataset.club);
+  });
+  // Show/hide club checkboxes based on preset (only for rbn.telegraphy.de)
+  const cwClubsDiv = document.getElementById('cwspots-clubs');
+  if (cwClubsDiv && cwSpotsPreset) {
+    cwClubsDiv.style.display = cwSpotsPreset.value === 'rbn.telegraphy.de:7000' ? '' : 'none';
+  }
   setEnableRbn.checked = s.enableRbn === true;
   setMyCallsign.value = s.myCallsign || '';
   // Load cluster nodes (migrate legacy if needed)
@@ -7181,6 +7193,7 @@ settingsSave.addEventListener('click', async () => {
     enableCwSpots: cwSpotsEnabled,
     cwSpotsHost: (() => { const p = document.getElementById('set-cwspots-preset'); if (!p || p.value === 'custom') return (document.getElementById('set-cwspots-host') || {}).value || 'rbn.telegraphy.de'; return p.value.split(':')[0]; })(),
     cwSpotsPort: (() => { const p = document.getElementById('set-cwspots-preset'); if (!p || p.value === 'custom') return parseInt((document.getElementById('set-cwspots-port') || {}).value, 10) || 7000; return parseInt(p.value.split(':')[1], 10) || 7000; })(),
+    cwSpotsClubs: [...document.querySelectorAll('#cwspots-clubs input[data-club]:checked')].map(cb => cb.dataset.club),
     enableRbn: rbnEnabled,
     enableWsjtx: wsjtxEnabled,
     enablePskr: pskrEnabled,

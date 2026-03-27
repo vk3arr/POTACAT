@@ -896,7 +896,21 @@ function connectCwSpots() {
   const host = settings.cwSpotsHost || 'rbn.telegraphy.de';
   const port = settings.cwSpotsPort || 7000;
   const preset = CW_SPOTS_PRESETS.find(p => p.host === host && p.port === port);
-  const postLogin = preset ? preset.postLogin : ['set/clubs', 'set/nodupes'];
+  // Build postLogin commands — filter by selected clubs if any
+  const clubs = settings.cwSpotsClubs || [];
+  let postLogin;
+  if (preset && preset.postLogin) {
+    postLogin = [...preset.postLogin];
+    // Replace generic 'set/clubs' with club-specific filter if user selected clubs
+    if (clubs.length > 0) {
+      const clubIdx = postLogin.indexOf('set/clubs');
+      if (clubIdx !== -1) postLogin[clubIdx] = 'set/clubs ' + clubs.join(',').toLowerCase();
+    }
+  } else {
+    postLogin = clubs.length > 0
+      ? ['set/clubs ' + clubs.join(',').toLowerCase(), 'set/nodupes']
+      : ['set/clubs', 'set/nodupes'];
+  }
   const myPos = gridToLatLon(settings.grid);
   const myEntity = ctyDb ? resolveCallsign(settings.myCallsign, ctyDb) : null;
 
@@ -7374,7 +7388,7 @@ app.whenReady().then(() => {
     }
 
     // Reconnect CW Spots if settings changed
-    const cwSpotsChanged = has('enableCwSpots') || has('cwSpotsHost') || has('cwSpotsPort') ||
+    const cwSpotsChanged = has('enableCwSpots') || has('cwSpotsHost') || has('cwSpotsPort') || has('cwSpotsClubs') ||
       (has('myCallsign') && settings.enableCwSpots);
     if (cwSpotsChanged) {
       if (settings.enableCwSpots) connectCwSpots(); else disconnectCwSpots();
