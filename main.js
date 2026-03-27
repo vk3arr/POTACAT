@@ -6855,10 +6855,13 @@ app.whenReady().then(() => {
     ft8Engine.setTxSlot(nextSlot);
     popoutJtcatQso = { mode: 'cq', call: null, grid: null, phase: 'cq', txMsg, report: null, sentReport: null, myCall, myGrid, txRetries: 0 };
     ft8Engine._txEnabled = true;
+    sendCatLog(`[JTCAT] CQ encoding: ${txMsg} slot=${nextSlot}`);
     await ft8Engine.setTxMessage(txMsg);
     const fired = ft8Engine.tryImmediateTx();
     if (!fired) {
       sendCatLog(`[JTCAT] CQ queued for next ${nextSlot} slot: ${txMsg} (samples=${ft8Engine._txSamples ? 'ready' : 'encoding'})`);
+    } else {
+      sendCatLog(`[JTCAT] CQ immediate TX: ${txMsg}`);
     }
     popoutBroadcastQso();
     console.log('[JTCAT Popout] CQ:', txMsg, 'slot:', nextSlot, 'immediate:', fired);
