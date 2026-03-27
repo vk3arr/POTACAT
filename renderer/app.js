@@ -1856,8 +1856,10 @@ function updateBlModeFromRadio() {
   if (blModeEdited || !radioMode) return;
   const m = radioMode.toUpperCase();
   const mapped = m === 'USB' || m === 'LSB' ? m : m === 'CW' || m === 'CW-R' || m === 'CWR' ? 'CW' : m === 'FT8' ? 'FT8' : m === 'FT4' ? 'FT4' : m === 'FM' || m === 'NFM' ? 'FM' : m === 'AM' ? 'AM' : m === 'RTTY' || m === 'RTTY-R' ? 'RTTY' : 'SSB';
+  const prev = blMode.value;
   blMode.value = mapped;
-  updateBlRstDefaults(mapped);
+  // Only reset RST defaults when mode actually changes (not every poll cycle)
+  if (mapped !== prev) updateBlRstDefaults(mapped);
 }
 
 /** Set RST defaults: 59 for phone, 599 for CW/digital */
