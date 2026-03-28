@@ -155,9 +155,12 @@
       if (status.sync) {
         qsoCountSpan.textContent = status.sync.totalQsos ?? '--';
         deviceCountSpan.textContent = status.sync.deviceCount ?? '--';
+      } else {
+        qsoCountSpan.textContent = '--';
+        deviceCountSpan.textContent = '--';
       }
       pendingCountSpan.textContent = status.pendingChanges ?? 0;
-      lastSyncSpan.textContent = formatTimestamp(status.lastSyncTimestamp);
+      lastSyncSpan.textContent = formatTimestamp(status.lastSyncTimestamp || status.sync?.lastSyncAt);
     } catch (err) {
       console.error('Cloud status error:', err);
     }
@@ -378,23 +381,70 @@
     });
   }
 
+  // ── Settings persistence ─────────────────────────────────────────
+
+  async function loadCloudSettings() {
+    try {
+      const settings = await window.api.getSettings();
+      if (deviceNameInput && settings.cloudDeviceName) {
+        deviceNameInput.value = settings.cloudDeviceName;
+      }
+      if (syncEnabledCheck) {
+        syncEnabledCheck.checked = !!settings.cloudSyncEnabled;
+      }
+      if (syncIntervalSelect && settings.cloudSyncInterval) {
+        syncIntervalSelect.value = String(settings.cloudSyncInterval);
+      }
+    } catch {}
+  }
+
+  // Save cloud-specific settings when the main settings save happens
+  // Also save on change for immediate persistence
+  if (deviceNameInput) {
+    deviceNameInput.addEventListener('change', async () => {
+      try {
+        const settings = await window.api.getSettings();
+        settings.cloudDeviceName = deviceNameInput.value.trim();
+        await window.api.saveSettings(settings);
+      } catch {}
+    });
+  }
+  if (syncEnabledCheck) {
+    syncEnabledCheck.addEventListener('change', async () => {
+      try {
+        const settings = await window.api.getSettings();
+        settings.cloudSyncEnabled = syncEnabledCheck.checked;
+        await window.api.saveSettings(settings);
+      } catch {}
+    });
+  }
+  if (syncIntervalSelect) {
+    syncIntervalSelect.addEventListener('change', async () => {
+      try {
+        const settings = await window.api.getSettings();
+        settings.cloudSyncInterval = parseInt(syncIntervalSelect.value, 10);
+        await window.api.saveSettings(settings);
+      } catch {}
+    });
+  }
+
   // ── Init ──────────────────────────────────────────────────────────
 
-  // Refresh cloud status when the Cloud tab is shown
+  // Load saved settings and refresh status when Cloud tab is shown
   const observer = new MutationObserver(() => {
     const cloudFieldsets = document.querySelectorAll('[data-settings-tab="cloud"]');
     if (cloudFieldsets.length > 0 && !cloudFieldsets[0].classList.contains('hidden') &&
         cloudFieldsets[0].offsetParent !== null) {
+      loadCloudSettings();
       refreshStatus();
     }
   });
 
-  // Observe the settings dialog for visibility changes
   const settingsDialog = document.getElementById('settings-dialog');
   if (settingsDialog) {
     observer.observe(settingsDialog, { attributes: true, subtree: true, attributeFilter: ['class', 'open'] });
   }
 
-  // Also refresh on initial load if already logged in
-  setTimeout(refreshStatus, 2000);
+  // Initial load
+  setTimeout(() => { loadCloudSettings(); refreshStatus(); }, 2000);
 })();
