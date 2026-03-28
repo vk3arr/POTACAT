@@ -3074,6 +3074,39 @@ function connectRemote() {
     });
   });
 
+  // Audio device enumeration and selection from ECHOCAT
+  remoteServer.on('get-audio-devices', async () => {
+    try {
+      const devices = await win.webContents.executeJavaScript(`
+        navigator.mediaDevices.enumerateDevices().then(d =>
+          d.filter(x => x.kind === 'audioinput' || x.kind === 'audiooutput')
+           .map(x => ({ deviceId: x.deviceId, label: x.label || x.deviceId.slice(0, 20), kind: x.kind }))
+        )
+      `);
+      const current = {
+        input: settings.remoteAudioInput || '',
+        output: settings.remoteAudioOutput || '',
+      };
+      remoteServer.sendToClient({ type: 'audio-devices', devices, current });
+    } catch (err) {
+      console.error('[Echo CAT] Failed to enumerate audio devices:', err.message);
+    }
+  });
+
+  remoteServer.on('set-audio-device', ({ kind, deviceId }) => {
+    if (kind === 'input') {
+      settings.remoteAudioInput = deviceId;
+    } else if (kind === 'output') {
+      settings.remoteAudioOutput = deviceId;
+    }
+    saveSettings(settings);
+    // Restart remote audio to apply new device (destroy, phone will re-initiate)
+    destroyRemoteAudioWindow();
+    sendCatLog(`[Audio] ${kind} device changed to: ${deviceId || '(default)'}`);
+    // Update desktop UI
+    if (win && !win.isDestroyed()) win.webContents.send('reload-prefs');
+  });
+
   // Unified rig-control from ECHOCAT phone (same dispatch as desktop IPC)
   remoteServer.on('rig-control', (data) => {
     if (!data || !data.action) return;

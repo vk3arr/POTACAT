@@ -609,6 +609,10 @@
         connectBtn.disabled = false;
         break;
 
+      case 'audio-devices':
+        populateAudioDevices(msg.devices, msg.current);
+        break;
+
       case 'spots':
         spots = msg.data || [];
         renderSpots();
@@ -1783,6 +1787,7 @@
   // --- Settings Overlay ---
   rigCtrlToggle.addEventListener('click', () => {
     settingsOverlay.classList.remove('hidden');
+    requestAudioDevices(); // refresh device list when settings opens
   });
 
   soClose.addEventListener('click', () => {
@@ -2184,6 +2189,45 @@
       ws.send(JSON.stringify({ type: 'set-txpower', value: parseInt(rcTxPowerSlider.value) }));
     }
   });
+
+  // --- Audio Device Selection ---
+  var rcAudioInput = document.getElementById('rc-audio-input');
+  var rcAudioOutput = document.getElementById('rc-audio-output');
+  var rcAudioRefresh = document.getElementById('rc-audio-refresh');
+
+  function requestAudioDevices() {
+    if (ws && ws.readyState === WebSocket.OPEN) {
+      ws.send(JSON.stringify({ type: 'get-audio-devices' }));
+    }
+  }
+
+  function populateAudioDevices(devices, current) {
+    rcAudioInput.innerHTML = '<option value="">(System Default)</option>';
+    rcAudioOutput.innerHTML = '<option value="">(System Default)</option>';
+    (devices || []).forEach(function(d) {
+      var opt = document.createElement('option');
+      opt.value = d.deviceId;
+      opt.textContent = d.label || d.deviceId.slice(0, 25);
+      if (d.kind === 'audioinput') rcAudioInput.appendChild(opt);
+      else if (d.kind === 'audiooutput') rcAudioOutput.appendChild(opt);
+    });
+    if (current) {
+      rcAudioInput.value = current.input || '';
+      rcAudioOutput.value = current.output || '';
+    }
+  }
+
+  rcAudioInput.addEventListener('change', function() {
+    if (ws && ws.readyState === WebSocket.OPEN) {
+      ws.send(JSON.stringify({ type: 'set-audio-device', kind: 'input', deviceId: rcAudioInput.value }));
+    }
+  });
+  rcAudioOutput.addEventListener('change', function() {
+    if (ws && ws.readyState === WebSocket.OPEN) {
+      ws.send(JSON.stringify({ type: 'set-audio-device', kind: 'output', deviceId: rcAudioOutput.value }));
+    }
+  });
+  rcAudioRefresh.addEventListener('click', requestAudioDevices);
 
   // --- Audio (WebRTC) ---
   audioBtn.addEventListener('click', async () => {
