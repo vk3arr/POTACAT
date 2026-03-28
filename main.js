@@ -6207,8 +6207,24 @@ app.whenReady().then(() => {
 
   createWindow();
   if (HEADLESS) {
-    console.log('[POTACAT] Running in headless mode — no GUI. Connect via ECHOCAT.');
-    console.log(`[POTACAT] ECHOCAT port: ${settings.remotePort || 7300}`);
+    // Force ECHOCAT on in headless mode — that's the whole point
+    if (!settings.enableRemote) {
+      settings.enableRemote = true;
+      saveSettings(settings);
+    }
+    const port = settings.remotePort || 7300;
+    console.log('[POTACAT] Running in headless mode — no GUI.');
+    console.log(`[POTACAT] ECHOCAT enabled on port ${port}`);
+    // Print URLs after a short delay to allow network interfaces to be ready
+    setTimeout(() => {
+      const ips = RemoteServer.getLocalIPs();
+      console.log('[POTACAT] Connect via ECHOCAT:');
+      for (const ip of ips) {
+        const label = ip.tailscale ? (ip.tailscaleHostname || 'Tailscale') : ip.name;
+        const host = ip.tailscaleHostname || ip.address;
+        console.log(`  ${label}: https://${host}:${port}`);
+      }
+    }, 1000);
   }
   if (!settings.enableWsjtx) connectCat();
   if (settings.enableCluster) connectCluster();
