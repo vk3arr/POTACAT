@@ -2102,18 +2102,20 @@ function advanceJtcatQso(q, results, setTxMsg, onDone) {
 
 // Server-side QSO state machine wrappers
 function processRemoteJtcatQso(results) {
-  advanceJtcatQso(remoteJtcatQso, results, remoteJtcatSetTxMsg, () => {
-    jtcatAutoLog(remoteJtcatQso);
+  const qso = remoteJtcatQso; // capture reference — don't rely on global in callbacks
+  advanceJtcatQso(qso, results, remoteJtcatSetTxMsg, () => {
+    jtcatAutoLog(qso); // use captured ref, not global
     remoteJtcatBroadcastQso();
   });
 }
 
 function processPopoutJtcatQso(results) {
-  advanceJtcatQso(popoutJtcatQso, results, (msg) => {
+  const qso = popoutJtcatQso; // capture reference — don't rely on global in callbacks
+  advanceJtcatQso(qso, results, (msg) => {
     if (ft8Engine) ft8Engine.setTxMessage(msg);
     popoutBroadcastQso();
   }, () => {
-    jtcatAutoLog(popoutJtcatQso);
+    jtcatAutoLog(qso); // use captured ref, not global (global may be replaced by auto-CQ)
     popoutBroadcastQso();
   });
 }
@@ -3628,6 +3630,12 @@ function connectRemote() {
     const myCall = remoteJtcatMyCall();
     const myGrid = remoteJtcatMyGrid();
     if (!myCall) return;
+    // If replacing an active QSO that had reports exchanged, auto-log it before replacing
+    if (remoteJtcatQso && remoteJtcatQso.call && remoteJtcatQso.report &&
+        remoteJtcatQso.call.toUpperCase() !== (call || '').toUpperCase()) {
+      sendCatLog(`[JTCAT] Replacing active QSO with ${remoteJtcatQso.call} — auto-logging`);
+      jtcatAutoLog(remoteJtcatQso);
+    }
     // Halt any active TX (e.g. CQ) so reply goes out on next boundary
     if (ft8Engine._txActive) ft8Engine.txComplete();
     const txMsg = call + ' ' + myCall + ' ' + myGrid;
@@ -6838,6 +6846,12 @@ app.whenReady().then(() => {
     const myCall = (settings.myCallsign || '').toUpperCase();
     const myGrid = (settings.grid || '').toUpperCase().substring(0, 4);
     if (!myCall) return;
+    // If replacing an active QSO that had reports exchanged, auto-log it before replacing
+    if (popoutJtcatQso && popoutJtcatQso.call && popoutJtcatQso.report &&
+        popoutJtcatQso.call.toUpperCase() !== (data.call || '').toUpperCase()) {
+      sendCatLog(`[JTCAT] Replacing active QSO with ${popoutJtcatQso.call} — auto-logging`);
+      jtcatAutoLog(popoutJtcatQso);
+    }
     // Halt any active TX (e.g. CQ) so reply goes out on next boundary
     if (ft8Engine._txActive) ft8Engine.txComplete();
     ft8Engine.setTxFreq(data.df || 1500);
