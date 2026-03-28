@@ -2354,18 +2354,17 @@ function stopJtcat() {
 
 // --- SmartSDR panadapter spots ---
 function needsSmartSdr() {
-  // Connect SmartSDR API if panadapter spots are enabled, CW keyer is active,
-  // WSJT-X is active with a Flex, ECHOCAT remote needs rig controls,
-  // CW XIT offset is configured, or Flex is the active rig (rig panel needs API
-  // for ATU/NB/RF gain/TX power — Kenwood CAT emulation doesn't support these)
+  // Connect SmartSDR API only when a Flex radio is configured or panadapter spots are enabled.
+  // All Flex-specific features (CW keyer, rig controls, XIT) require catTarget.type === 'tcp'.
+  const isFlex = settings.catTarget && settings.catTarget.type === 'tcp';
   if (settings.smartSdrSpots) return true;
+  if (!isFlex) return false; // non-Flex rigs never need SmartSDR
   if (settings.enableCwKeyer) return true;
   if (settings.enableRemote && settings.remoteCwEnabled) return true;
-  if (settings.enableWsjtx && settings.catTarget && settings.catTarget.type === 'tcp') return true;
-  if (settings.enableRemote && settings.catTarget && settings.catTarget.type === 'tcp') return true;
-  if (settings.cwXit && settings.catTarget && settings.catTarget.type === 'tcp') return true;
-  if (settings.catTarget && settings.catTarget.type === 'tcp') return true;
-  return false;
+  if (settings.enableWsjtx) return true;
+  if (settings.enableRemote) return true;
+  if (settings.cwXit) return true;
+  return true; // Flex rig always needs API for rig panel (ATU/NB/gain/power)
 }
 
 function connectSmartSdr() {

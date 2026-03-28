@@ -4393,7 +4393,7 @@
     if (!text || !ws || ws.readyState !== WebSocket.OPEN) return;
     // Expand macros: {op_firstname} → operator name or "OM", {call} → tuned callsign
     var expanded = text
-      .replace(/\{op_firstname\}/gi, tunedOpName || 'OM')
+      .replace(/\{op_firstname\}/gi, tunedOpName || '')
       .replace(/\{call\}/gi, tunedCallsign || '');
     ws.send(JSON.stringify({ type: 'cw-text', text: expanded }));
     playCwTextSidetone(expanded);
