@@ -69,7 +69,8 @@ const { callsignToProgram, fetchParksForProgram, loadParksCache, saveParksCache,
 const { fetchDxCalExpeditions } = require('./lib/dxcal');
 const { getModel, getModelList } = require('./lib/rig-models');
 const { autoUpdater } = require('electron-updater');
-const { registerCloudIpc } = require('./lib/cloud-ipc');
+let registerCloudIpc;
+try { registerCloudIpc = require('./lib/cloud-ipc').registerCloudIpc; } catch { registerCloudIpc = null; }
 
 // --- QRZ.com callsign lookup ---
 let qrz = new QrzClient();
@@ -6216,19 +6217,21 @@ app.whenReady().then(() => {
     hamrsBridge.start(settings.logbookHost || '127.0.0.1', parseInt(settings.logbookPort, 10) || 2237);
   }
 
-  // --- Cloud Sync ---
-  cloudIpc = registerCloudIpc({
-    app,
-    win: () => win,
-    getSettings: () => settings,
-    saveSettings: (s) => { Object.assign(settings, s); saveSettings(settings); },
-    getLogPath: () => settings.adifLogPath || path.join(app.getPath('userData'), 'potacat_qso_log.adi'),
-    loadWorkedQsos: () => loadWorkedQsos(),
-    sendToRenderer: (channel, data) => {
-      if (win && !win.isDestroyed()) win.webContents.send(channel, data);
-    },
-  });
-  cloudIpc.startBackgroundSync();
+  // --- Cloud Sync (optional — module may not be present in open-source builds) ---
+  if (registerCloudIpc) {
+    cloudIpc = registerCloudIpc({
+      app,
+      win: () => win,
+      getSettings: () => settings,
+      saveSettings: (s) => { Object.assign(settings, s); saveSettings(settings); },
+      getLogPath: () => settings.adifLogPath || path.join(app.getPath('userData'), 'potacat_qso_log.adi'),
+      loadWorkedQsos: () => loadWorkedQsos(),
+      sendToRenderer: (channel, data) => {
+        if (win && !win.isDestroyed()) win.webContents.send(channel, data);
+      },
+    });
+    cloudIpc.startBackgroundSync();
+  }
 
   // Cold start: check if app was launched via potacat:// URL
   const protocolUrl = process.argv.find(a => a.startsWith('potacat://'));
