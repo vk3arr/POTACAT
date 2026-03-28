@@ -2,6 +2,12 @@ const { app, BrowserWindow, ipcMain, Menu, dialog, Notification, screen, nativeI
 const path = require('path');
 const fs = require('fs');
 
+// --- Headless mode: POTACAT --headless ---
+// Runs the full app with a hidden window — no GUI shown.
+// Useful for serving ECHOCAT from a headless server (e.g. Raspberry Pi).
+// All features work: CAT, spots, FT8 engine, ECHOCAT, CW keyer.
+const HEADLESS = process.argv.includes('--headless');
+
 // --- Launcher-only mode: POTACAT.exe --launcher ---
 // Runs the lightweight HTTPS launcher server without any GUI.
 // Used by the Windows/macOS/Linux Startup to start/stop POTACAT remotely.
@@ -5135,7 +5141,7 @@ function createWindow() {
   // Allow MIDI device access for CW keyer
   win.webContents.session.setPermissionRequestHandler((wc, perm, cb) => cb(true));
 
-  win.show();
+  if (!HEADLESS) win.show();
 
   win.loadFile(path.join(__dirname, 'renderer', 'index.html'));
 
@@ -6200,6 +6206,10 @@ app.whenReady().then(() => {
   loadAssociations().catch(err => console.error('Failed to load SOTA associations:', err.message));
 
   createWindow();
+  if (HEADLESS) {
+    console.log('[POTACAT] Running in headless mode — no GUI. Connect via ECHOCAT.');
+    console.log(`[POTACAT] ECHOCAT port: ${settings.remotePort || 7300}`);
+  }
   if (!settings.enableWsjtx) connectCat();
   if (settings.enableCluster) connectCluster();
   if (settings.enableCwSpots) connectCwSpots();
@@ -8682,6 +8692,7 @@ process.on('SIGINT', () => { gracefulCleanup(); process.exit(0); });
 process.on('SIGTERM', () => { gracefulCleanup(); process.exit(0); });
 
 app.on('window-all-closed', () => {
+  if (HEADLESS) return; // keep running in headless mode
   // Fire-and-forget telemetry — don't await; delaying app.quit() causes SIGABRT on macOS
   const sessionSeconds = Math.round((Date.now() - sessionStartTime) / 1000);
   sendTelemetry(sessionSeconds);
