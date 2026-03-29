@@ -1579,6 +1579,23 @@ async function saveQsoRecord(qsoData) {
     }
   }
 
+  // Expand respot comment macros ({op_firstname}, {rst}, {mycallsign}, {QTH})
+  if (qsoData.respotComment) {
+    let opName = '';
+    if (qrz.configured && settings.enableQrz && qsoData.callsign) {
+      try {
+        const qrzData = await qrz.lookup(qsoData.callsign.split('/')[0]);
+        if (qrzData) opName = qrzData.nickname || qrzData.fname || '';
+      } catch { /* QRZ lookup failed — leave blank */ }
+    }
+    qsoData.respotComment = qsoData.respotComment
+      .replace(/\{op_firstname\}/gi, opName)
+      .replace(/\{rst\}/gi, qsoData.rstSent || '59')
+      .replace(/\{mycallsign\}/gi, settings.myCallsign || '')
+      .replace(/\{QTH\}/gi, settings.grid || '')
+      .replace(/\{call\}/gi, qsoData.callsign || '');
+  }
+
   // Re-spot on POTA if requested
   if (qsoData.respot && qsoData.sig === 'POTA' && qsoData.sigInfo && settings.myCallsign) {
     try {
