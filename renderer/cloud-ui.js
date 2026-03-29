@@ -275,8 +275,8 @@
       const cs = await getCallsignForEmbed();
       if (!cs) return alert('No callsign found. Sign in to POTACAT Cloud first.');
       const widget = link.dataset.widget;
-      const url = `${embedBaseUrl}/${widget}/${cs}`;
-      console.log('Opening embed:', url);
+      const extra = link.dataset.extra || '';
+      const url = `${embedBaseUrl}/${widget}/${cs}${extra}`;
       window.api.openExternal(url);
     });
   });
@@ -287,8 +287,9 @@
       const cs = await getCallsignForEmbed();
       if (!cs) return;
       const widget = link.dataset.widget;
+      const extra = link.dataset.extra || '';
       const height = link.dataset.height || '150';
-      const embedCode = `<iframe src="${embedBaseUrl}/${widget}/${cs}" style="border:none;width:400px;height:${height}px;" loading="lazy"></iframe>`;
+      const embedCode = `<iframe src="${embedBaseUrl}/${widget}/${cs}${extra}" style="border:none;width:400px;height:${height}px;" loading="lazy"></iframe>`;
 
       navigator.clipboard.writeText(embedCode).then(() => {
         if (embedCopiedMsg) {
