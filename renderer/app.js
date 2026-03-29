@@ -6876,6 +6876,9 @@ async function openSettingsDialog(tab) {
   document.querySelectorAll('#cwspots-clubs input[data-club]').forEach(cb => {
     cb.checked = savedClubs.includes(cb.dataset.club);
   });
+  // Restore max WPM
+  const cwMaxWpmEl = document.getElementById('set-cwspots-max-wpm');
+  if (cwMaxWpmEl) cwMaxWpmEl.value = s.cwSpotsMaxWpm || 0;
   // Show/hide club checkboxes based on preset (only for rbn.telegraphy.de)
   const cwClubsDiv = document.getElementById('cwspots-clubs');
   if (cwClubsDiv && cwSpotsPreset) {
@@ -7242,6 +7245,7 @@ settingsSave.addEventListener('click', async () => {
     cwSpotsHost: (() => { const p = document.getElementById('set-cwspots-preset'); if (!p || p.value === 'custom') return (document.getElementById('set-cwspots-host') || {}).value || 'rbn.telegraphy.de'; return p.value.split(':')[0]; })(),
     cwSpotsPort: (() => { const p = document.getElementById('set-cwspots-preset'); if (!p || p.value === 'custom') return parseInt((document.getElementById('set-cwspots-port') || {}).value, 10) || 7000; return parseInt(p.value.split(':')[1], 10) || 7000; })(),
     cwSpotsClubs: [...document.querySelectorAll('#cwspots-clubs input[data-club]:checked')].map(cb => cb.dataset.club),
+    cwSpotsMaxWpm: parseInt((document.getElementById('set-cwspots-max-wpm') || {}).value, 10) || 0,
     enableRbn: rbnEnabled,
     enableWsjtx: wsjtxEnabled,
     enablePskr: pskrEnabled,

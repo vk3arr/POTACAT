@@ -732,6 +732,8 @@ function formatClusterComment(comment) {
 
 // Build a normalized spot from raw cluster data (shared by all cluster clients)
 function buildClusterSpot(raw, myPos, myEntity) {
+  // Extract WPM from RBN-style comment (e.g. "CW 28 dB 29 WPM CQ")
+  const wpmMatch = (raw.comment || '').match(/(\d+)\s*WPM/i);
   const spot = {
     source: 'dxc',
     callsign: raw.callsign,
@@ -746,6 +748,7 @@ function buildClusterSpot(raw, myPos, myEntity) {
     lon: null,
     band: raw.band,
     spotTime: raw.spotTime,
+    wpm: wpmMatch ? parseInt(wpmMatch[1], 10) : null,
   };
 
   if (ctyDb) {
@@ -930,6 +933,12 @@ function connectCwSpots() {
       : [];
 
     client.on('spot', (raw) => {
+      // Filter by max WPM if configured
+      const maxWpm = settings.cwSpotsMaxWpm || 0;
+      if (maxWpm > 0) {
+        const wpmMatch = (raw.comment || '').match(/(\d+)\s*WPM/i);
+        if (wpmMatch && parseInt(wpmMatch[1], 10) > maxWpm) return;
+      }
       const spot = buildClusterSpot(raw, myPos, myEntity);
       spot.source = 'cwspots';
       spot.cwClub = clubTag; // tag with club name for badge display
@@ -7560,7 +7569,7 @@ app.whenReady().then(() => {
     }
 
     // Reconnect CW Spots if settings changed
-    const cwSpotsChanged = has('enableCwSpots') || has('cwSpotsHost') || has('cwSpotsPort') || has('cwSpotsClubs') ||
+    const cwSpotsChanged = has('enableCwSpots') || has('cwSpotsHost') || has('cwSpotsPort') || has('cwSpotsClubs') || has('cwSpotsMaxWpm') ||
       (has('myCallsign') && settings.enableCwSpots);
     if (cwSpotsChanged) {
       if (settings.enableCwSpots) connectCwSpots(); else disconnectCwSpots();
