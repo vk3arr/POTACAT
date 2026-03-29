@@ -6365,10 +6365,11 @@ app.whenReady().then(() => {
     cloudIpc.startBackgroundSync();
   }
 
-  // Ensure launcher background service is installed and running
-  if (app.isPackaged) {
+  // Ensure launcher background service is installed for boot startup.
+  // Only INSTALL (to Startup/LaunchAgents) — don't spawn duplicates on every app launch.
+  // The launcher starts on next boot, or user can enable it manually in Settings.
+  if (app.isPackaged && settings.enableLauncher !== false) {
     try {
-      const { execSync, spawn } = require('child_process');
       const exePath = process.execPath;
       const configDir = app.getPath('userData');
       const configPath = path.join(configDir, 'launcher-config.json');
@@ -6377,29 +6378,37 @@ app.whenReady().then(() => {
       }
 
       if (process.platform === 'win32') {
-        // Install to Startup folder if not already there
         const startupDir = path.join(process.env.APPDATA || '', 'Microsoft', 'Windows', 'Start Menu', 'Programs', 'Startup');
         const vbsPath = path.join(startupDir, 'POTACAT-Launcher.vbs');
         if (!fs.existsSync(vbsPath)) {
           fs.writeFileSync(vbsPath, `Set WshShell = CreateObject("WScript.Shell")\r\nWshShell.Run """${exePath}"" --launcher", 0, False\r\n`);
           console.log('[Launcher] Installed to Windows Startup');
         }
-        // Start the launcher now if not already running
-        spawn(exePath, ['--launcher'], { detached: true, stdio: 'ignore' }).unref();
-        console.log('[Launcher] Started background process');
+        // Start launcher only if port 7301 is not already in use
+        const net = require('net');
+        const probe = net.createServer();
+        probe.once('error', () => { /* port in use — launcher already running */ });
+        probe.once('listening', () => {
+          probe.close();
+          // Port is free — start the launcher
+          require('child_process').spawn(exePath, ['--launcher'], { detached: true, stdio: 'ignore' }).unref();
+          console.log('[Launcher] Started background process');
+        });
+        probe.listen(7301, '0.0.0.0');
       } else if (process.platform === 'darwin') {
         const plistDir = path.join(require('os').homedir(), 'Library', 'LaunchAgents');
         const plistPath = path.join(plistDir, 'com.potacat.launcher.plist');
         if (!fs.existsSync(plistPath)) {
           fs.mkdirSync(plistDir, { recursive: true });
-          const plist = `<?xml version="1.0" encoding="UTF-8"?>\n<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">\n<plist version="1.0"><dict><key>Label</key><string>com.potacat.launcher</string><key>ProgramArguments</key><array><string>${exePath}</string><string>--launcher</string></array><key>RunAtLoad</key><true/><key>KeepAlive</key><true/></dict></plist>`;
+          // No KeepAlive — don't respawn endlessly. RunAtLoad starts it on login.
+          const plist = `<?xml version="1.0" encoding="UTF-8"?>\n<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">\n<plist version="1.0"><dict><key>Label</key><string>com.potacat.launcher</string><key>ProgramArguments</key><array><string>${exePath}</string><string>--launcher</string></array><key>RunAtLoad</key><true/></dict></plist>`;
           fs.writeFileSync(plistPath, plist);
+          try { require('child_process').execSync(`launchctl load "${plistPath}"`, { stdio: 'pipe' }); } catch {}
           console.log('[Launcher] Installed to macOS LaunchAgents');
         }
-        try { execSync(`launchctl load "${plistPath}"`, { stdio: 'pipe' }); } catch {}
       }
     } catch (err) {
-      console.error('[Launcher] Auto-start failed:', err.message);
+      console.error('[Launcher] Setup failed:', err.message);
     }
   }
 
