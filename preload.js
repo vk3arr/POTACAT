@@ -203,6 +203,7 @@ contextBridge.exposeInMainWorld('api', {
   cloudLogout: () => ipcRenderer.invoke('cloud-logout'),
   cloudGetStatus: () => ipcRenderer.invoke('cloud-get-status'),
   cloudSyncNow: () => ipcRenderer.invoke('cloud-sync-now'),
+  cloudBulkPrepare: () => ipcRenderer.invoke('cloud-bulk-prepare'),
   cloudBulkUpload: () => ipcRenderer.invoke('cloud-bulk-upload'),
   cloudDownloadAdif: () => ipcRenderer.invoke('cloud-download-adif'),
   cloudVerifySubscription: () => ipcRenderer.invoke('cloud-verify-subscription'),

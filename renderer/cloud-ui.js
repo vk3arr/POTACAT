@@ -358,26 +358,44 @@
 
   if (initialUploadBtn) {
     initialUploadBtn.addEventListener('click', async () => {
-      if (!confirm('This will upload your entire local log to the cloud. This may take a few minutes for large logs. Continue?')) return;
-
+      // Step 1: Count QSOs and estimate time
       initialUploadBtn.disabled = true;
-      uploadProgress.classList.remove('hidden');
-      uploadBar.value = 0;
-      uploadText.textContent = 'Preparing...';
+      initialUploadBtn.textContent = 'Scanning log...';
 
       try {
+        const prep = await window.api.cloudBulkPrepare();
+        if (prep.error) {
+          alert('Error reading log: ' + prep.error);
+          return;
+        }
+
+        if (prep.qsoCount === 0) {
+          alert('No QSOs found in your log file.');
+          return;
+        }
+
+        // Step 2: Show estimate and confirm
+        const msg = `Your log has ${prep.qsoCount.toLocaleString()} QSOs.\n\nEstimated upload time: ${prep.estimatedTime}.\n\nUpload to POTACAT Cloud?`;
+        if (!confirm(msg)) return;
+
+        // Step 3: Upload
+        uploadProgress.classList.remove('hidden');
+        uploadBar.value = 0;
+        uploadText.textContent = `Uploading 0 / ${prep.qsoCount.toLocaleString()} QSOs...`;
+
         const result = await window.api.cloudBulkUpload();
         if (result.error) {
           alert('Upload failed: ' + result.error);
         } else {
-          uploadText.textContent = `Done! ${result.imported} QSOs uploaded, ${result.duplicates} duplicates skipped.`;
+          uploadText.textContent = `Done! ${result.imported.toLocaleString()} QSOs uploaded, ${result.duplicates.toLocaleString()} duplicates skipped.`;
           await refreshStatus();
         }
       } catch (err) {
         alert('Upload error: ' + err.message);
       } finally {
         initialUploadBtn.disabled = false;
-        setTimeout(() => uploadProgress.classList.add('hidden'), 5000);
+        initialUploadBtn.textContent = 'Upload Existing Log';
+        setTimeout(() => uploadProgress.classList.add('hidden'), 8000);
       }
     });
   }
@@ -422,7 +440,7 @@
       if (data.phase === 'upload' && data.total > 0) {
         const pct = Math.round((data.current / data.total) * 100);
         uploadBar.value = pct;
-        uploadText.textContent = `Uploading... ${data.current} / ${data.total} (${pct}%)`;
+        uploadText.textContent = `Uploading... chunk ${data.current} of ${data.total} (${pct}%)`;
       }
     });
   }
