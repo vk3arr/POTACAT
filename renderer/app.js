@@ -2289,6 +2289,26 @@ setQrzApiKey.addEventListener('blur', async () => {
 setQrzUsername.addEventListener('input', updateQrzLogbookVisibility);
 setQrzPassword.addEventListener('input', updateQrzLogbookVisibility);
 
+// QRZ Logbook download button
+document.getElementById('qrz-download-btn').addEventListener('click', async () => {
+  const statusEl = document.getElementById('qrz-download-status');
+  statusEl.textContent = 'Downloading...';
+  statusEl.style.color = '';
+  try {
+    const result = await window.api.qrzDownloadLogbook();
+    if (result.ok) {
+      statusEl.textContent = `Imported ${result.imported} new QSOs (${result.total} total in QRZ)`;
+      statusEl.style.color = '#4ecca3';
+    } else {
+      statusEl.textContent = result.error || 'Download failed';
+      statusEl.style.color = '#e94560';
+    }
+  } catch (err) {
+    statusEl.textContent = 'Error: ' + err.message;
+    statusEl.style.color = '#e94560';
+  }
+});
+
 setEnableCluster.addEventListener('change', () => {
   clusterConfig.classList.toggle('hidden', !setEnableCluster.checked);
 });

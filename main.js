@@ -8353,6 +8353,62 @@ app.whenReady().then(() => {
     return QrzClient.checkApiKey(key, settings.myCallsign || '');
   });
 
+  // --- QRZ Logbook Download & Merge ---
+  ipcMain.handle('qrz-download-logbook', async () => {
+    if (!settings.qrzApiKey) return { ok: false, error: 'QRZ API key not configured' };
+    try {
+      sendCatLog('[QRZ] Downloading logbook...');
+      const adifText = await QrzClient.fetchLogbook(settings.qrzApiKey, settings.myCallsign || '');
+      if (!adifText) return { ok: true, imported: 0, message: 'QRZ logbook is empty' };
+
+      // Parse downloaded ADIF records
+      const downloaded = [];
+      const recordRe = /<call:[^>]+>([^<]*)/gi;
+      // Split into individual records by <eor>
+      const records = adifText.split(/<eor>/i).filter(r => r.trim());
+
+      // Parse existing log for dedup
+      const logPath = settings.adifLogPath || path.join(app.getPath('userData'), 'potacat_qso_log.adi');
+      let existingQsos = new Set();
+      try {
+        const existing = parseAllRawQsos(logPath);
+        for (const q of existing) {
+          // Dedup key: callsign + date + time + band
+          const key = [q.CALL, q.QSO_DATE, (q.TIME_ON || '').slice(0, 4), q.BAND].join('|').toUpperCase();
+          existingQsos.add(key);
+        }
+      } catch { /* no existing log or parse error */ }
+
+      let imported = 0;
+      for (const record of records) {
+        // Extract key fields for dedup
+        const fields = {};
+        const fieldRe = /<(\w+):\d+(?::\w+)?>([^<]*)/gi;
+        let fm;
+        while ((fm = fieldRe.exec(record)) !== null) {
+          fields[fm[1].toUpperCase()] = fm[2].trim();
+        }
+        if (!fields.CALL) continue;
+
+        const key = [fields.CALL, fields.QSO_DATE, (fields.TIME_ON || '').slice(0, 4), fields.BAND].join('|').toUpperCase();
+        if (existingQsos.has(key)) continue; // already in log
+
+        // Append the raw ADIF record
+        appendRawQso(logPath, record.trim());
+        existingQsos.add(key);
+        imported++;
+      }
+
+      sendCatLog(`[QRZ] Downloaded ${records.length} QSOs, imported ${imported} new`);
+      // Reload worked QSOs to update checkmarks
+      if (imported > 0) loadWorkedQsos();
+      return { ok: true, imported, total: records.length };
+    } catch (err) {
+      sendCatLog(`[QRZ] Logbook download failed: ${err.message}`);
+      return { ok: false, error: err.message };
+    }
+  });
+
   // --- Activator Mode: Parks DB IPC ---
   ipcMain.handle('fetch-parks-db', async (_e, prefix) => {
     if (!prefix) return { success: false, error: 'No program prefix' };

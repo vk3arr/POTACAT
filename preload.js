@@ -196,6 +196,7 @@ contextBridge.exposeInMainWorld('api', {
   onRemoteStatus: (cb) => ipcRenderer.on('remote-status', (_e, s) => cb(s)),
   onReloadPrefs: (cb) => ipcRenderer.on('reload-prefs', () => cb()),
   // Cloud Sync
+  qrzDownloadLogbook: () => ipcRenderer.invoke('qrz-download-logbook'),
   cloudGoogleSignIn: () => ipcRenderer.invoke('cloud-google-signin'),
   cloudLogin: (email, password) => ipcRenderer.invoke('cloud-login', email, password),
   cloudRegister: (email, password, callsign) => ipcRenderer.invoke('cloud-register', email, password, callsign),
