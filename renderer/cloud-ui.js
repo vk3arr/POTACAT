@@ -259,24 +259,32 @@
   const embedBaseUrl = 'https://api.potacat.com/embed';
   const embedCopiedMsg = document.getElementById('cloud-embed-copied');
 
-  function getCallsignForEmbed() {
-    return (userCallsignSpan && userCallsignSpan.textContent) || '';
+  async function getCallsignForEmbed() {
+    // Try the UI first, then settings
+    const fromUI = userCallsignSpan && userCallsignSpan.textContent.trim();
+    if (fromUI) return fromUI;
+    try {
+      const settings = await window.api.getSettings();
+      return settings.cloudUser?.callsign || settings.myCallsign || '';
+    } catch { return ''; }
   }
 
   document.querySelectorAll('.cloud-embed-view').forEach(link => {
-    link.addEventListener('click', (e) => {
+    link.addEventListener('click', async (e) => {
       e.preventDefault();
-      const cs = getCallsignForEmbed();
-      if (!cs) return;
+      const cs = await getCallsignForEmbed();
+      if (!cs) return alert('No callsign found. Sign in to POTACAT Cloud first.');
       const widget = link.dataset.widget;
-      window.api.openExternal(`${embedBaseUrl}/${widget}/${cs}`);
+      const url = `${embedBaseUrl}/${widget}/${cs}`;
+      console.log('Opening embed:', url);
+      window.api.openExternal(url);
     });
   });
 
   document.querySelectorAll('.cloud-embed-copy').forEach(link => {
-    link.addEventListener('click', (e) => {
+    link.addEventListener('click', async (e) => {
       e.preventDefault();
-      const cs = getCallsignForEmbed();
+      const cs = await getCallsignForEmbed();
       if (!cs) return;
       const widget = link.dataset.widget;
       const height = link.dataset.height || '150';
