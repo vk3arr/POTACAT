@@ -160,7 +160,7 @@
         deviceCountSpan.textContent = '--';
       }
       pendingCountSpan.textContent = status.pendingChanges ?? 0;
-      lastSyncSpan.textContent = formatTimestamp(status.lastSyncTimestamp || status.sync?.lastSyncAt);
+      lastSyncSpan.textContent = formatTimestamp(status.lastSyncAt || status.lastSyncTimestamp || status.sync?.lastSyncAt);
     } catch (err) {
       console.error('Cloud status error:', err);
     }
