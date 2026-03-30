@@ -2302,6 +2302,23 @@
   }
 
   // --- Audio (WebRTC) ---
+  const audioConnectBtn = document.getElementById('audio-connect-btn');
+  const bbControls = document.getElementById('bb-controls');
+
+  function showAudioControls() {
+    audioConnectBtn.classList.add('hidden');
+    bbControls.classList.remove('hidden');
+  }
+  function showConnectPrompt() {
+    audioConnectBtn.classList.remove('hidden');
+    bbControls.classList.add('hidden');
+  }
+
+  audioConnectBtn.addEventListener('click', async () => {
+    await startAudio();
+    if (micReady && !audioEnabled) await startAudio();
+  });
+
   audioBtn.addEventListener('click', async () => {
     if (audioEnabled) {
       stopAudio();
@@ -2414,6 +2431,7 @@
       audioBtn.classList.add('active');
       audioDot.classList.remove('hidden');
       volBoostBtn.classList.remove('hidden');
+      showAudioControls();
       updateSsbPanelVisibility();
       // Activate Media Session so earbud play/pause button works for PTT
       startSessionKeepAlive();
@@ -2440,6 +2458,7 @@
     volBoostLevel = 0;
     audioBtn.classList.remove('active');
     volBoostBtn.classList.add('hidden');
+    showConnectPrompt();
     volBoostBtn.classList.remove('active');
     volBoostBtn.textContent = 'Vol 1x';
     audioDot.classList.add('hidden');

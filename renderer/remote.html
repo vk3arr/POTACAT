@@ -785,13 +785,18 @@
     </div>
 
     <div id="bottom-bar">
-      <div class="bb-stack">
-        <button id="audio-btn" type="button" class="bb-square-btn">Live</button>
-        <button id="vol-boost-btn" type="button" class="bb-square-btn hidden" title="Volume Boost">Vol 1x</button>
+      <!-- Initial state: big connect button for new users -->
+      <button id="audio-connect-btn" type="button" class="bb-connect-btn">&#x1F50A; Tap to Connect Audio</button>
+      <!-- Active state: shown after audio connects -->
+      <div id="bb-controls" class="bb-controls hidden">
+        <div class="bb-stack">
+          <button id="audio-btn" type="button" class="bb-square-btn">Live</button>
+          <button id="vol-boost-btn" type="button" class="bb-square-btn hidden" title="Volume Boost">Vol 1x</button>
+        </div>
+        <button type="button" id="scan-btn" class="bb-round-btn" title="Scan spots">Scan</button>
+        <button id="ptt-btn" type="button" class="ptt-button">PTT</button>
+        <button id="estop-btn" type="button" class="bb-halt-btn">HALT</button>
       </div>
-      <button type="button" id="scan-btn" class="bb-round-btn" title="Scan spots">Scan</button>
-      <button id="ptt-btn" type="button" class="ptt-button">PTT</button>
-      <button id="estop-btn" type="button" class="bb-halt-btn">HALT</button>
     </div>
 
     <!-- Log QSO sheet -->

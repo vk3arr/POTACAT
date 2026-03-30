@@ -747,6 +747,17 @@ html, body {
 #spot-map { flex: 1; min-height: 0; }
 
 /* --- Scan Status Button --- */
+/* Bottom bar: connect audio prompt */
+.bb-connect-btn {
+  width: 100%; padding: 16px; border-radius: 12px;
+  font-size: 16px; font-weight: 700;
+  background: #1a3a2e; color: var(--pota); border: 2px solid var(--pota);
+  cursor: pointer; letter-spacing: 0.5px;
+}
+.bb-connect-btn:active { background: var(--pota); color: #000; }
+.bb-controls { display: flex; align-items: center; justify-content: center; gap: 16px; width: 100%; }
+.bb-controls.hidden { display: none; }
+
 /* Bottom bar: stacked square buttons (Live/Vol) */
 .bb-stack { display: flex; flex-direction: column; gap: 4px; }
 .bb-square-btn {
