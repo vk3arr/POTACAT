@@ -551,6 +551,10 @@ function sendCatSmeter(val) {
   _currentSmeter = val;
 }
 
+function sendCatSwr(val) {
+  if (win && !win.isDestroyed()) win.webContents.send('cat-swr', val);
+}
+
 // Broadcast full rig control state to renderer and ECHOCAT
 function broadcastRigState() {
   const rigType = detectRigType();
@@ -623,6 +627,7 @@ async function connectCat() {
     cat.on('power', sendCatPower);
     cat.on('nb', sendCatNb);
     cat.on('smeter', sendCatSmeter);
+    cat.on('swr', sendCatSwr);
     cat.connect(target);
     return;
   }
@@ -662,6 +667,7 @@ async function connectCat() {
     cat.on('mode', sendCatMode);
     cat.on('nb', sendCatNb);
     cat.on('smeter', sendCatSmeter);
+    cat.on('swr', sendCatSwr);
     sendCatLog(`Connecting to rigctld on 127.0.0.1:${rigctldPort}`);
     transport.connect({ host: '127.0.0.1', port: rigctldPort });
 
@@ -682,6 +688,7 @@ async function connectCat() {
     cat.on('mode', sendCatMode);
     cat.on('nb', sendCatNb);
     cat.on('smeter', sendCatSmeter);
+    cat.on('swr', sendCatSwr);
     const host = target.host || '127.0.0.1';
     const port = target.port || 4532;
     sendCatLog(`Connecting to remote rigctld on ${host}:${port}`);
@@ -701,6 +708,7 @@ async function connectCat() {
     cat.on('power', sendCatPower);
     cat.on('nb', sendCatNb);
     cat.on('smeter', sendCatSmeter);
+    cat.on('swr', sendCatSwr);
     sendCatLog(`Connecting to Icom on ${target.path}`);
     transport.connect({ path: target.path, baudRate: target.baudRate || 19200, dtrOff: target.dtrOff });
 
@@ -719,6 +727,7 @@ async function connectCat() {
     cat.on('power', sendCatPower);
     cat.on('nb', sendCatNb);
     cat.on('smeter', sendCatSmeter);
+    cat.on('swr', sendCatSwr);
     sendCatLog(`Connecting to ${model.brand || 'radio'} on ${target.path}`);
     transport.connect({ path: target.path, baudRate: target.baudRate || 9600, dtrOff: target.dtrOff, connectDelay: model.connectDelay });
   }

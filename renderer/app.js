@@ -9300,8 +9300,29 @@ window.api.onCatSmeter((val) => {
   smeterDisplay.style.color = val < 80 ? '#4ecca3' : val < 160 ? '#ffd740' : '#e94560';
 });
 
+// --- SWR Display (during TX) ---
+const swrDisplay = document.getElementById('swr-display');
+window.api.onCatSwr((val) => {
+  // RM1 returns 0-255 scale. Convert to SWR ratio.
+  // Typical mapping: 0=1.0, 60≈1.5, 120≈2.0, 180≈3.0, 255≈∞
+  // Approximate: SWR = 1 + (val / 60)
+  if (val <= 0) {
+    swrDisplay.classList.add('hidden');
+    return;
+  }
+  const swr = 1.0 + (val / 60);
+  const swrText = swr < 10 ? swr.toFixed(1) : '>10';
+  swrDisplay.textContent = 'SWR ' + swrText;
+  swrDisplay.classList.remove('hidden');
+  // Color: green ≤1.5, yellow ≤2.0, orange ≤3.0, red >3.0
+  swrDisplay.style.color = swr <= 1.5 ? '#4ecca3' : swr <= 2.0 ? '#ffd740' : swr <= 3.0 ? '#f0a500' : '#e94560';
+});
+
 window.api.onCatStatus((s) => {
-  if (!s.connected) smeterDisplay.classList.add('hidden');
+  if (!s.connected) {
+    smeterDisplay.classList.add('hidden');
+    swrDisplay.classList.add('hidden');
+  }
 });
 
 // --- CAT Log Panel ---
