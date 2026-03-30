@@ -2512,10 +2512,12 @@
     if (!list.length) return;
     scanning = true;
     scanIndex = 0;
+    // Start at the NEXT spot after the current frequency
     if (currentFreqKhz) {
       const match = list.findIndex(s => Math.abs(parseFloat(s.frequency) - currentFreqKhz) < 1);
-      if (match !== -1) scanIndex = match;
+      if (match !== -1) scanIndex = match + 1;
     }
+    if (scanIndex >= list.length) scanIndex = 0;
     scanBtn.textContent = 'Stop';
     scanBtn.classList.add('scan-active');
     scanStep();
