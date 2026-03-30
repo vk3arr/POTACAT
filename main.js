@@ -19,6 +19,16 @@ if (process.argv.includes('--launcher')) {
     : path.join(__dirname, 'scripts', 'launcher.js');
   // Prevent Electron from quitting when there are no windows
   app.on('window-all-closed', (e) => { /* keep running */ });
+  // Catch EADDRINUSE gracefully — another launcher is already running
+  process.on('uncaughtException', (err) => {
+    if (err.code === 'EADDRINUSE') {
+      console.log('[Launcher] Port already in use — exiting quietly.');
+      app.quit();
+      return;
+    }
+    console.error('[Launcher] Fatal:', err.message);
+    app.quit();
+  });
   app.whenReady().then(() => {
     if (fs.existsSync(launcherScript)) {
       require(launcherScript);
