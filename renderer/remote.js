@@ -1440,7 +1440,7 @@
   });
 
   // --- Dial Pad ---
-  const STEP_SIZES = [0.1, 0.5, 1, 5, 10, 25, 100];
+  const STEP_SIZES = [0.01, 0.1, 0.5, 1, 5, 10, 25, 100];
   let dpStepIdx = 2; // default 1 kHz
   let dpInput = '';
 
@@ -1530,7 +1530,7 @@
     const step = STEP_SIZES[dpStepIdx];
     const base = dpInput ? parseFloat(dpInput) : currentFreqKhz;
     if (!base || isNaN(base)) return;
-    const newFreq = Math.round((base + step) * 10) / 10;
+    const newFreq = Math.round((base + step) * 100) / 100;
     dpInput = newFreq.toString();
     updateDpDisplay();
     dpTune(newFreq);
@@ -1540,7 +1540,7 @@
     const step = STEP_SIZES[dpStepIdx];
     const base = dpInput ? parseFloat(dpInput) : currentFreqKhz;
     if (!base || isNaN(base)) return;
-    const newFreq = Math.round((base - step) * 10) / 10;
+    const newFreq = Math.round((base - step) * 100) / 100;
     if (newFreq < 100) return;
     dpInput = newFreq.toString();
     updateDpDisplay();
@@ -1551,14 +1551,14 @@
   freqUpBtn.addEventListener('click', (e) => {
     e.stopPropagation();
     const step = STEP_SIZES[dpStepIdx];
-    const newFreq = Math.round((currentFreqKhz + step) * 10) / 10;
+    const newFreq = Math.round((currentFreqKhz + step) * 100) / 100;
     dpTune(newFreq);
   });
 
   freqDownBtn.addEventListener('click', (e) => {
     e.stopPropagation();
     const step = STEP_SIZES[dpStepIdx];
-    const newFreq = Math.round((currentFreqKhz - step) * 10) / 10;
+    const newFreq = Math.round((currentFreqKhz - step) * 100) / 100;
     if (newFreq >= 100) dpTune(newFreq);
   });
 
