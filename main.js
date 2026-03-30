@@ -192,6 +192,7 @@ let _currentFreqHz = 0;    // tracked for remote radio status
 let _currentMode = '';
 let _remoteTxState = false;
 let _currentNbState = false;
+let _currentSmeter = 0;
 let _currentAtuState = false;
 let _currentVfo = 'A';
 let _currentFilterWidth = 0;
@@ -545,6 +546,11 @@ function sendCatNb(on) {
   broadcastRigState();
 }
 
+function sendCatSmeter(val) {
+  if (win && !win.isDestroyed()) win.webContents.send('cat-smeter', val);
+  _currentSmeter = val;
+}
+
 // Broadcast full rig control state to renderer and ECHOCAT
 function broadcastRigState() {
   const rigType = detectRigType();
@@ -616,6 +622,7 @@ async function connectCat() {
     cat.on('mode', sendCatMode);
     cat.on('power', sendCatPower);
     cat.on('nb', sendCatNb);
+    cat.on('smeter', sendCatSmeter);
     cat.connect(target);
     return;
   }
@@ -654,6 +661,7 @@ async function connectCat() {
     cat.on('frequency', sendCatFrequency);
     cat.on('mode', sendCatMode);
     cat.on('nb', sendCatNb);
+    cat.on('smeter', sendCatSmeter);
     sendCatLog(`Connecting to rigctld on 127.0.0.1:${rigctldPort}`);
     transport.connect({ host: '127.0.0.1', port: rigctldPort });
 
@@ -673,6 +681,7 @@ async function connectCat() {
     cat.on('frequency', sendCatFrequency);
     cat.on('mode', sendCatMode);
     cat.on('nb', sendCatNb);
+    cat.on('smeter', sendCatSmeter);
     const host = target.host || '127.0.0.1';
     const port = target.port || 4532;
     sendCatLog(`Connecting to remote rigctld on ${host}:${port}`);
@@ -691,6 +700,7 @@ async function connectCat() {
     cat.on('mode', sendCatMode);
     cat.on('power', sendCatPower);
     cat.on('nb', sendCatNb);
+    cat.on('smeter', sendCatSmeter);
     sendCatLog(`Connecting to Icom on ${target.path}`);
     transport.connect({ path: target.path, baudRate: target.baudRate || 19200, dtrOff: target.dtrOff });
 
@@ -708,6 +718,7 @@ async function connectCat() {
     cat.on('mode', sendCatMode);
     cat.on('power', sendCatPower);
     cat.on('nb', sendCatNb);
+    cat.on('smeter', sendCatSmeter);
     sendCatLog(`Connecting to ${model.brand || 'radio'} on ${target.path}`);
     transport.connect({ path: target.path, baudRate: target.baudRate || 9600, dtrOff: target.dtrOff, connectDelay: model.connectDelay });
   }

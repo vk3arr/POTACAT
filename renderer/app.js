@@ -9284,6 +9284,31 @@ window.api.onCatPower((watts) => {
   radioPower = watts;
 });
 
+// --- S-Meter Display ---
+const smeterDisplay = document.getElementById('smeter-display');
+window.api.onCatSmeter((val) => {
+  // Convert raw value to S-units: Kenwood 0-30=S0-S9, Yaesu 0-255, Icom 0-255
+  // Normalize all to a 0-9+ scale
+  let sUnit;
+  if (val <= 120) {
+    // S0-S9 range (0-120 maps to S0-S9 for most radios)
+    sUnit = Math.round(val * 9 / 120);
+    smeterDisplay.textContent = 'S' + sUnit;
+  } else {
+    // Above S9: show S9+dB
+    const dbOver = Math.round((val - 120) * 60 / 135);
+    smeterDisplay.textContent = 'S9+' + dbOver;
+  }
+  smeterDisplay.classList.remove('hidden');
+  // Color: green for weak, yellow for moderate, red for strong
+  smeterDisplay.style.color = val < 80 ? '#4ecca3' : val < 160 ? '#ffd740' : '#e94560';
+});
+
+// Show/hide S-meter with CAT connection
+window.api.onCatStatus((s) => {
+  if (!s.connected) smeterDisplay.classList.add('hidden');
+});
+
 // --- CAT Log Panel ---
 const catLogPanel = document.getElementById('cat-log-panel');
 const catLogOutput = document.getElementById('cat-log-output');
