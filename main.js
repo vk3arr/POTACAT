@@ -2487,6 +2487,8 @@ function connectSmartSdr() {
   // Bind to GUI client for ECHOCAT rig controls (ATU, etc.)
   smartSdr.setNeedsBind(!!settings.enableRemote);
   // Log CW auth results
+  smartSdr.on('smeter', sendCatSmeter);
+
   smartSdr.on('cw-auth', ({ method, ok }) => {
     console.log(`[SmartSDR] CW auth: method=${method} ok=${ok}`);
     if (win && !win.isDestroyed()) {
