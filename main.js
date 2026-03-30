@@ -620,6 +620,7 @@ async function connectCat() {
     // Flex: use old CatClient for basic CAT (SmartSDR handles the real work)
     cat = new CatClient();
     cat._debug = true;
+    cat._skipMeters = true; // Flex CAT emulation doesn't support SM; or RM1;
     cat.on('log', sendCatLog);
     cat.on('status', sendCatStatus);
     cat.on('frequency', sendCatFrequency);
