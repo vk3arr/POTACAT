@@ -9284,45 +9284,61 @@ window.api.onCatPower((watts) => {
   radioPower = watts;
 });
 
-// --- S-Meter / Signal Display ---
-const smeterDisplay = document.getElementById('smeter-display');
-let _smeterTxState = false;
+// --- Floating S-Meter / SWR Box ---
+const meterBox = document.getElementById('meter-box');
+const smeterBarCanvas = document.getElementById('smeter-bar');
+const smeterTextEl = document.getElementById('smeter-text');
+const swrBarCanvas = document.getElementById('swr-bar');
+const swrTextEl = document.getElementById('swr-text');
+
+function drawMeterBar(canvas, level, color) {
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  const w = canvas.width, h = canvas.height;
+  ctx.clearRect(0, 0, w, h);
+  ctx.fillStyle = '#1a1a2e';
+  ctx.fillRect(0, 0, w, h);
+  const barW = Math.round(Math.max(0, Math.min(1, level)) * w);
+  ctx.fillStyle = color;
+  ctx.fillRect(0, 0, barW, h);
+  // Tick marks
+  ctx.fillStyle = 'rgba(255,255,255,0.15)';
+  for (let i = 1; i <= 9; i++) {
+    ctx.fillRect(Math.round(i * w / 12), 0, 1, h);
+  }
+}
 
 window.api.onCatSmeter((val) => {
+  meterBox.classList.remove('hidden');
+  const level = val / 255;
+  const color = val < 80 ? '#4ecca3' : val < 160 ? '#ffd740' : '#e94560';
+  drawMeterBar(smeterBarCanvas, level, color);
   if (val <= 120) {
-    const sUnit = Math.round(val * 9 / 120);
-    smeterDisplay.textContent = 'S' + sUnit;
+    smeterTextEl.textContent = 'S' + Math.round(val * 9 / 120);
   } else {
-    const dbOver = Math.round((val - 120) * 60 / 135);
-    smeterDisplay.textContent = 'S9+' + dbOver;
+    smeterTextEl.textContent = 'S9+' + Math.round((val - 120) * 60 / 135);
   }
-  smeterDisplay.classList.remove('hidden');
-  smeterDisplay.style.color = val < 80 ? '#4ecca3' : val < 160 ? '#ffd740' : '#e94560';
+  smeterTextEl.style.color = color;
 });
 
-// --- SWR Display (during TX) ---
-const swrDisplay = document.getElementById('swr-display');
 window.api.onCatSwr((val) => {
-  // RM1 returns 0-255 scale. Convert to SWR ratio.
-  // Typical mapping: 0=1.0, 60≈1.5, 120≈2.0, 180≈3.0, 255≈∞
-  // Approximate: SWR = 1 + (val / 60)
   if (val <= 0) {
-    swrDisplay.classList.add('hidden');
+    drawMeterBar(swrBarCanvas, 0, '#333');
+    swrTextEl.textContent = '—';
+    swrTextEl.style.color = '#666';
     return;
   }
+  meterBox.classList.remove('hidden');
   const swr = 1.0 + (val / 60);
-  const swrText = swr < 10 ? swr.toFixed(1) : '>10';
-  swrDisplay.textContent = 'SWR ' + swrText;
-  swrDisplay.classList.remove('hidden');
-  // Color: green ≤1.5, yellow ≤2.0, orange ≤3.0, red >3.0
-  swrDisplay.style.color = swr <= 1.5 ? '#4ecca3' : swr <= 2.0 ? '#ffd740' : swr <= 3.0 ? '#f0a500' : '#e94560';
+  const level = Math.min(1, (swr - 1) / 4);
+  const color = swr <= 1.5 ? '#4ecca3' : swr <= 2.0 ? '#ffd740' : swr <= 3.0 ? '#f0a500' : '#e94560';
+  drawMeterBar(swrBarCanvas, level, color);
+  swrTextEl.textContent = swr < 10 ? swr.toFixed(1) : '>10';
+  swrTextEl.style.color = color;
 });
 
 window.api.onCatStatus((s) => {
-  if (!s.connected) {
-    smeterDisplay.classList.add('hidden');
-    swrDisplay.classList.add('hidden');
-  }
+  if (!s.connected) meterBox.classList.add('hidden');
 });
 
 // --- CAT Log Panel ---

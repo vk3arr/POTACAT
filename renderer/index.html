@@ -179,8 +179,6 @@
         </div>
       </div>
       <span id="rig-panel-btn" class="status hidden" style="background:#2a6e4e;color:#fff;cursor:pointer;">Rig</span>
-      <span id="smeter-display" class="status hidden" style="font-family:monospace;font-size:11px;color:#4ecca3;cursor:default;" title="S-Meter">S0</span>
-      <span id="swr-display" class="status hidden" style="font-family:monospace;font-size:11px;cursor:default;" title="SWR (during TX)">SWR —</span>
       <div id="rig-popover" class="rig-popover hidden">
         <div class="rig-popover-tabs">
           <button class="rig-tab-btn active" data-rig-tab="controls">Controls</button>
@@ -384,7 +382,20 @@
 
   <main>
     <div id="split-container" class="split-horizontal">
-      <div id="table-pane">
+      <div id="table-pane" style="position:relative;">
+        <!-- Floating S-Meter / SWR box -->
+        <div id="meter-box" class="meter-box hidden">
+          <div class="meter-row">
+            <span class="meter-label">S</span>
+            <canvas id="smeter-bar" width="120" height="14"></canvas>
+            <span id="smeter-text" class="meter-val">—</span>
+          </div>
+          <div class="meter-row">
+            <span class="meter-label">SWR</span>
+            <canvas id="swr-bar" width="120" height="14"></canvas>
+            <span id="swr-text" class="meter-val">—</span>
+          </div>
+        </div>
         <div id="table-scroll-wrap">
           <table id="spots-table">
             <thead>
