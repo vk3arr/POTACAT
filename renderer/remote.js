@@ -617,6 +617,18 @@
         populateAudioDevices(msg.devices, msg.current);
         break;
 
+      case 'smeter':
+        updateEchoSmeter(msg.value);
+        break;
+
+      case 'swr':
+        updateEchoSwr(msg.value);
+        break;
+
+      case 'swr-ratio':
+        updateEchoSwrRatio(msg.value);
+        break;
+
       case 'qrz-result':
         if (msg.callsign && msg.callsign.toUpperCase() === tunedCallsign.toUpperCase().split('/')[0]) {
           tunedOpName = msg.fname || '';
@@ -2248,6 +2260,68 @@
     }
   });
   rcAudioRefresh.addEventListener('click', requestAudioDevices);
+
+  // --- ECHOCAT S-Meter / SWR display ---
+  var echoMeterStrip = document.getElementById('echo-meter-strip');
+  var echoSmeterBar = document.getElementById('echo-smeter-bar');
+  var echoSmeterText = document.getElementById('echo-smeter-text');
+  var echoSwrBar = document.getElementById('echo-swr-bar');
+  var echoSwrText = document.getElementById('echo-swr-text');
+  var echoShowMeter = document.getElementById('echo-show-meter');
+  var echoMeterEnabled = localStorage.getItem('echoMeterEnabled') === 'true';
+
+  echoShowMeter.checked = echoMeterEnabled;
+  if (echoMeterEnabled) echoMeterStrip.classList.remove('hidden');
+
+  echoShowMeter.addEventListener('change', function() {
+    echoMeterEnabled = echoShowMeter.checked;
+    localStorage.setItem('echoMeterEnabled', echoMeterEnabled);
+    echoMeterStrip.classList.toggle('hidden', !echoMeterEnabled);
+  });
+
+  function drawEchoBar(canvas, level, color) {
+    if (!canvas) return;
+    var ctx = canvas.getContext('2d');
+    var w = canvas.width, h = canvas.height;
+    ctx.clearRect(0, 0, w, h);
+    ctx.fillStyle = '#1a1a2e';
+    ctx.fillRect(0, 0, w, h);
+    ctx.fillStyle = color;
+    ctx.fillRect(0, 0, Math.round(Math.max(0, Math.min(1, level)) * w), h);
+  }
+
+  function updateEchoSmeter(val) {
+    if (!echoMeterEnabled) return;
+    echoMeterStrip.classList.remove('hidden');
+    var level = val / 255;
+    var color = val < 80 ? '#4ecca3' : val < 160 ? '#ffd740' : '#e94560';
+    drawEchoBar(echoSmeterBar, level, color);
+    if (val <= 120) {
+      echoSmeterText.textContent = 'S' + Math.round(val * 9 / 120);
+    } else {
+      echoSmeterText.textContent = 'S9+' + Math.round((val - 120) * 60 / 135);
+    }
+    echoSmeterText.style.color = color;
+  }
+
+  function updateEchoSwr(val) {
+    if (!echoMeterEnabled || val <= 0) return;
+    var swr = 1.0 + (val / 60);
+    var level = Math.min(1, (swr - 1) / 4);
+    var color = swr <= 1.5 ? '#4ecca3' : swr <= 2.0 ? '#ffd740' : swr <= 3.0 ? '#f0a500' : '#e94560';
+    drawEchoBar(echoSwrBar, level, color);
+    echoSwrText.textContent = swr < 10 ? swr.toFixed(1) : '>10';
+    echoSwrText.style.color = color;
+  }
+
+  function updateEchoSwrRatio(swr) {
+    if (!echoMeterEnabled) return;
+    var level = Math.min(1, (swr - 1) / 4);
+    var color = swr <= 1.5 ? '#4ecca3' : swr <= 2.0 ? '#ffd740' : swr <= 3.0 ? '#f0a500' : '#e94560';
+    drawEchoBar(echoSwrBar, level, color);
+    echoSwrText.textContent = swr < 10 ? swr.toFixed(1) : '>10';
+    echoSwrText.style.color = color;
+  }
 
   // --- Audio Level Meters & Gain Controls ---
   var rxMeterCanvas = document.getElementById('rx-meter');

@@ -549,10 +549,12 @@ function sendCatNb(on) {
 function sendCatSmeter(val) {
   if (win && !win.isDestroyed()) win.webContents.send('cat-smeter', val);
   _currentSmeter = val;
+  if (remoteServer && remoteServer.running) remoteServer.sendToClient({ type: 'smeter', value: val });
 }
 
 function sendCatSwr(val) {
   if (win && !win.isDestroyed()) win.webContents.send('cat-swr', val);
+  if (remoteServer && remoteServer.running) remoteServer.sendToClient({ type: 'swr', value: val });
 }
 
 // Broadcast full rig control state to renderer and ECHOCAT
@@ -2499,8 +2501,8 @@ function connectSmartSdr() {
   // Log CW auth results
   smartSdr.on('smeter', sendCatSmeter);
   smartSdr.on('swr-ratio', (swr) => {
-    // Send SWR ratio directly to renderer (bypass RM1 conversion)
     if (win && !win.isDestroyed()) win.webContents.send('cat-swr-ratio', swr);
+    if (remoteServer && remoteServer.running) remoteServer.sendToClient({ type: 'swr-ratio', value: swr });
   });
 
   smartSdr.on('cw-auth', ({ method, ok }) => {

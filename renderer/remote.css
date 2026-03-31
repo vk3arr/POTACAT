@@ -748,6 +748,22 @@ html, body {
 #spot-map { flex: 1; min-height: 0; }
 
 /* --- Scan Status Button --- */
+/* ECHOCAT S-Meter / SWR strip */
+.echo-meter-strip {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  background: var(--bg-header);
+  border-bottom: 1px solid var(--border);
+  font-family: monospace;
+  font-size: 11px;
+  flex-shrink: 0;
+}
+.echo-meter-strip.hidden { display: none; }
+.em-label { color: #888; font-weight: 600; }
+.em-val { color: #ccc; font-weight: 700; min-width: 36px; }
+
 /* Bottom bar: connect audio prompt */
 .bb-connect-btn {
   width: 100%; padding: 16px; border-radius: 12px;
