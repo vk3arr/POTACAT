@@ -1994,6 +1994,17 @@ html, body {
   opacity: 0.6;
   border-left-color: #f0a500;
 }
+.contact-row.dupe {
+  opacity: 0.5;
+  border-left-color: #e94560;
+}
+.dupe-tag {
+  font-size: 9px;
+  font-weight: 700;
+  color: #e94560;
+  margin-left: 4px;
+  vertical-align: middle;
+}
 
 .contact-nr {
   font-size: 11px;

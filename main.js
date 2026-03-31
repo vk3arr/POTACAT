@@ -3908,6 +3908,10 @@ function connectRemote() {
       }
 
       // Track session contact and send enhanced log-ok
+      // Dupe check: same callsign + same band in current activation session
+      const existingContacts = remoteServer.getSessionContacts();
+      const callUpper = qsoData.callsign.toUpperCase();
+      const isDupe = existingContacts.some(c => c.callsign.toUpperCase() === callUpper && c.band === band);
       const contactData = {
         callsign: qsoData.callsign,
         timeUtc: qsoTime,
@@ -3916,6 +3920,7 @@ function connectRemote() {
         band,
         rstSent: qsoData.rstSent,
         rstRcvd: qsoData.rstRcvd,
+        dupe: isDupe,
       };
       const contact = remoteServer.addSessionContact(contactData);
       remoteServer.sendLogResult({

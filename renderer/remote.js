@@ -3526,12 +3526,14 @@
       const sorted = [...sessionContacts].reverse();
       contactList.innerHTML = sorted.map(c => {
         const offClass = c._offline ? ' offline' : '';
+        const dupeClass = c.dupe ? ' dupe' : '';
         const time = c.timeUtc ? c.timeUtc.slice(0, 2) + ':' + c.timeUtc.slice(2, 4) : '';
         const freq = c.freqKhz ? parseFloat(c.freqKhz).toFixed(1) : '';
-        return `<div class="contact-row${offClass}">
+        const dupeTag = c.dupe ? ' <span class="dupe-tag">DUPE</span>' : '';
+        return `<div class="contact-row${offClass}${dupeClass}">
           <span class="contact-nr">${c.nr || ''}</span>
           <span class="contact-time">${esc(time)}</span>
-          <span class="contact-call">${esc(c.callsign)}</span>
+          <span class="contact-call">${esc(c.callsign)}${dupeTag}</span>
           <span class="contact-freq">${freq}</span>
           <span class="contact-mode">${esc(c.mode || '')}</span>
           <span class="contact-rst">${esc(c.rstSent || '')}/${esc(c.rstRcvd || '')}</span>
@@ -3543,14 +3545,16 @@
 
   function updateLogBadge() {
     const count = sessionContacts.length;
-    tabActivateBadge.textContent = count;
+    const dupes = sessionContacts.filter(c => c.dupe).length;
+    tabActivateBadge.textContent = dupes > 0 ? count + ' (' + dupes + ' dupe' + (dupes > 1 ? 's' : '') + ')' : count;
     tabActivateBadge.classList.toggle('hidden', count === 0);
   }
 
   function updateLogFooter() {
     const total = sessionContacts.length;
+    const dupes = sessionContacts.filter(c => c.dupe).length;
     const queued = offlineQueue.length;
-    logFooterCount.textContent = total + ' QSO' + (total !== 1 ? 's' : '');
+    logFooterCount.textContent = total + ' QSO' + (total !== 1 ? 's' : '') + (dupes > 0 ? ' (' + dupes + ' dupe' + (dupes > 1 ? 's' : '') + ')' : '');
     if (queued > 0) {
       logFooterQueued.textContent = queued + ' queued';
       logFooterQueued.classList.remove('hidden');
