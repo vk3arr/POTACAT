@@ -1274,6 +1274,12 @@
   });
 
   // --- Multi-select dropdown helpers ---
+  var _filterScroll = document.getElementById('filter-toolbar-scroll');
+  function closeAllDropdowns() {
+    document.querySelectorAll('.rc-dropdown.open').forEach(d => d.classList.remove('open'));
+    if (_filterScroll) _filterScroll.style.overflowX = '';
+  }
+
   function initMultiDropdown(container, onChange) {
     const btn = container.querySelector('.rc-dropdown-btn');
     const menu = container.querySelector('.rc-dropdown-menu');
@@ -1288,13 +1294,19 @@
     }
     btn.addEventListener('click', (e) => {
       e.stopPropagation();
-      document.querySelectorAll('.rc-dropdown.open').forEach(d => { if (d !== container) d.classList.remove('open'); });
+      document.querySelectorAll('.rc-dropdown.open').forEach(d => {
+        if (d !== container) d.classList.remove('open');
+      });
       container.classList.toggle('open');
       if (container.classList.contains('open')) {
         _dropdownJustOpened = true;
+        // Remove overflow clipping so position:fixed menus escape on mobile WebKit
+        if (_filterScroll) _filterScroll.style.overflowX = 'visible';
         const rect = btn.getBoundingClientRect();
         menu.style.left = rect.left + 'px';
         menu.style.top = (rect.bottom + 4) + 'px';
+      } else {
+        if (_filterScroll) _filterScroll.style.overflowX = '';
       }
     });
     menu.addEventListener('click', (e) => e.stopPropagation());
@@ -1333,10 +1345,13 @@
     spotsDropdown.classList.toggle('open');
     if (spotsDropdown.classList.contains('open')) {
       _dropdownJustOpened = true;
+      if (_filterScroll) _filterScroll.style.overflowX = 'visible';
       const rect = spotsDropdown.querySelector('.rc-dropdown-btn').getBoundingClientRect();
       const panel = spotsDropdown.querySelector('.rc-spots-panel');
       panel.style.left = rect.left + 'px';
       panel.style.top = (rect.bottom + 4) + 'px';
+    } else {
+      if (_filterScroll) _filterScroll.style.overflowX = '';
     }
   });
 
@@ -1366,7 +1381,7 @@
   var _dropdownJustOpened = false;
   document.addEventListener('click', () => {
     if (_dropdownJustOpened) { _dropdownJustOpened = false; return; }
-    document.querySelectorAll('.rc-dropdown.open').forEach(d => d.classList.remove('open'));
+    closeAllDropdowns();
   });
 
   // --- Filter persistence (sync to desktop settings.json) ---
@@ -2399,20 +2414,17 @@
     bbControls.classList.remove('hidden');
   }
   function showConnectPrompt() {
+    audioConnectBtn.textContent = 'Tap to Connect Audio';
     audioConnectBtn.classList.remove('hidden');
     bbControls.classList.add('hidden');
   }
 
   audioConnectBtn.addEventListener('click', async () => {
-    if (!micReady) {
-      audioConnectBtn.textContent = 'Connecting...';
-      await startAudio();
-      if (micReady && !audioEnabled) {
-        audioConnectBtn.textContent = '✓ Mic — Tap once more';
-      }
-    }
-    if (micReady && !audioEnabled) {
-      await startAudio();
+    audioConnectBtn.textContent = 'Connecting...';
+    await startAudio();
+    // If audio didn't fully connect, reset button so user can retry
+    if (!audioEnabled) {
+      audioConnectBtn.textContent = 'Tap to Connect Audio';
     }
   });
 

@@ -702,7 +702,6 @@ html, body {
 .rc-dropdown-menu, .rc-spots-panel {
   display: none;
   position: fixed;
-  margin-top: 4px;
   background: var(--bg-card);
   border: 1px solid #444;
   border-radius: 8px;
