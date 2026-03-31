@@ -463,7 +463,7 @@ html, body {
 #settings-overlay {
   position: fixed;
   inset: 0;
-  z-index: 80;
+  z-index: 300;
   display: flex;
   flex-direction: column;
   background: var(--bg);
