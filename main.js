@@ -5257,6 +5257,17 @@ function isOnScreen(saved) {
   });
 }
 
+/** Clamp bounds so window fits within the nearest display's work area */
+function clampToWorkArea(bounds) {
+  const display = screen.getDisplayMatching(bounds) || screen.getPrimaryDisplay();
+  const wa = display.workArea;
+  const w = Math.min(bounds.width, wa.width);
+  const h = Math.min(bounds.height, wa.height);
+  const x = Math.max(wa.x, Math.min(bounds.x, wa.x + wa.width - w));
+  const y = Math.max(wa.y, Math.min(bounds.y, wa.y + wa.height - h));
+  return { x, y, width: w, height: h };
+}
+
 function getIconPath() {
   const variant = settings.lightIcon ? 'icon-light.png' : 'icon.png';
   return path.join(__dirname, 'assets', variant);
@@ -5274,10 +5285,13 @@ function applyIconToAllWindows() {
 function createWindow() {
   // Create window at default size first, then restore bounds via setBounds()
   // so Electron resolves DPI scaling for the correct display
+  const primary = screen.getPrimaryDisplay().workArea;
+  const defaultW = Math.min(1100, primary.width);
+  const defaultH = Math.min(700, primary.height);
   const isMac = process.platform === 'darwin';
   win = new BrowserWindow({
-    width: 1100,
-    height: 700,
+    width: defaultW,
+    height: defaultH,
     title: `POTACAT - v${require('./package.json').version}`,
     ...(isMac ? { titleBarStyle: 'hiddenInset' } : { frame: false }),
     icon: getIconPath(),
@@ -5290,10 +5304,10 @@ function createWindow() {
     },
   });
 
-  // Restore saved window bounds after creation (DPI-aware)
+  // Restore saved window bounds after creation (DPI-aware), clamped to fit screen
   const saved = settings.windowBounds;
   if (saved && saved.width > 200 && saved.height > 150 && isOnScreen(saved)) {
-    win.setBounds(saved);
+    win.setBounds(clampToWorkArea(saved));
   }
 
   if (settings.windowMaximized) {
@@ -6522,7 +6536,7 @@ app.whenReady().then(() => {
     // Restore saved bounds after creation (DPI-aware)
     const saved = settings.mapPopoutBounds;
     if (saved && saved.width > 200 && saved.height > 150 && isOnScreen(saved)) {
-      popoutWin.setBounds(saved);
+      popoutWin.setBounds(clampToWorkArea(saved));
     }
     popoutWin.show();
 
@@ -6651,7 +6665,7 @@ app.whenReady().then(() => {
     // Restore saved bounds (DPI-aware)
     const saved = settings.qsoPopoutBounds;
     if (saved && saved.width > 200 && saved.height > 150 && isOnScreen(saved)) {
-      qsoPopoutWin.setBounds(saved);
+      qsoPopoutWin.setBounds(clampToWorkArea(saved));
     }
     qsoPopoutWin.show();
 
@@ -6729,7 +6743,7 @@ app.whenReady().then(() => {
     // Restore saved bounds (DPI-aware)
     const saved = settings.spotsPopoutBounds;
     if (saved && saved.width > 200 && saved.height > 150 && isOnScreen(saved)) {
-      spotsPopoutWin.setBounds(saved);
+      spotsPopoutWin.setBounds(clampToWorkArea(saved));
     }
     spotsPopoutWin.show();
 
@@ -6818,7 +6832,7 @@ app.whenReady().then(() => {
     // Restore saved bounds (DPI-aware)
     const saved = settings.clusterPopoutBounds;
     if (saved && saved.width > 200 && saved.height > 150 && isOnScreen(saved)) {
-      clusterPopoutWin.setBounds(saved);
+      clusterPopoutWin.setBounds(clampToWorkArea(saved));
     }
     clusterPopoutWin.show();
 
@@ -6898,7 +6912,7 @@ app.whenReady().then(() => {
     // Restore saved bounds (DPI-aware)
     const saved = settings.actmapPopoutBounds;
     if (saved && saved.width > 200 && saved.height > 150 && isOnScreen(saved)) {
-      actmapPopoutWin.setBounds(saved);
+      actmapPopoutWin.setBounds(clampToWorkArea(saved));
     }
     actmapPopoutWin.show();
 
@@ -7011,7 +7025,7 @@ app.whenReady().then(() => {
     });
     const saved = settings.jtcatPopoutBounds;
     if (saved && saved.width > 400 && saved.height > 300 && isOnScreen(saved)) {
-      jtcatPopoutWin.setBounds(saved);
+      jtcatPopoutWin.setBounds(clampToWorkArea(saved));
     }
     jtcatPopoutWin.show();
     jtcatPopoutWin.setMenuBarVisibility(false);
