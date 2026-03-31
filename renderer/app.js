@@ -569,6 +569,7 @@ const cwKeyerConfig = document.getElementById('cw-keyer-config');
 const setCwKeyerType = document.getElementById('set-cw-keyer-type');
 const cwMidiConfig = document.getElementById('cw-midi-config');
 const cwWinkeyerConfig = document.getElementById('cw-winkeyer-config');
+const cwKeyboardConfig = document.getElementById('cw-keyboard-config');
 const setCwKeyerMode = document.getElementById('set-cw-keyer-mode');
 const setCwWpm = document.getElementById('set-cw-wpm');
 const setCwSwapPaddles = document.getElementById('set-cw-swap-paddles');
@@ -3034,14 +3035,15 @@ setCwKeyerType.addEventListener('change', () => {
   updateCwKeyerTypeVisibility();
   if (setCwKeyerType.value === 'winkeyer') {
     populateWinKeyerPorts();
-  } else {
+  } else if (setCwKeyerType.value === 'midi') {
     populateMidiDevices().then(() => connectMidiDevice(setCwMidiDevice.value));
   }
 });
 function updateCwKeyerTypeVisibility() {
-  const isWk = setCwKeyerType.value === 'winkeyer';
-  cwMidiConfig.classList.toggle('hidden', isWk);
-  cwWinkeyerConfig.classList.toggle('hidden', !isWk);
+  const type = setCwKeyerType.value;
+  cwMidiConfig.classList.toggle('hidden', type !== 'midi');
+  cwWinkeyerConfig.classList.toggle('hidden', type !== 'winkeyer');
+  cwKeyboardConfig.classList.toggle('hidden', type !== 'keyboard');
 }
 async function populateWinKeyerPorts() {
   const ports = await window.api.listPorts();

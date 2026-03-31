@@ -1618,7 +1618,8 @@
       <label class="checkbox-label"><input type="checkbox" id="set-enable-cw-keyer"> Enable CW Keyer</label>
       <div id="cw-keyer-config" class="hidden" style="margin-top:6px;margin-left:12px;">
         <label>Keyer Type:
-          <select id="set-cw-keyer-type" style="width:200px;">
+          <select id="set-cw-keyer-type" style="width:220px;">
+            <option value="keyboard">Keyboard (VBand / Vail)</option>
             <option value="midi">MIDI Paddle (software iambic)</option>
             <option value="winkeyer">K1EL WinKeyer</option>
           </select>
@@ -1664,6 +1665,10 @@
             </label>
           </div>
           <span class="help-text" style="display:block;">Connect WinKeyer KEY output to your radio's straight key jack. Paddles plug into the WinKeyer, not the PC.</span>
+        </div>
+        <!-- Keyboard config -->
+        <div id="cw-keyboard-config" class="hidden" style="margin-top:6px;">
+          <span class="help-text" style="display:block;"><b>Left Ctrl</b> = dit, <b>Right Ctrl</b> = dah. Compatible with VBand and Vail apps. The built-in iambic keyer generates CW from your keystrokes.</span>
         </div>
         <!-- Shared CW settings -->
         <label style="margin-top:8px;">Speed (WPM):
