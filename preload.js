@@ -210,6 +210,7 @@ contextBridge.exposeInMainWorld('api', {
   cloudBulkUpload: () => ipcRenderer.invoke('cloud-bulk-upload'),
   cloudDownloadAdif: () => ipcRenderer.invoke('cloud-download-adif'),
   cloudVerifySubscription: () => ipcRenderer.invoke('cloud-verify-subscription'),
+  cloudSaveBmacEmail: (email) => ipcRenderer.invoke('cloud-save-bmac-email', email),
   cloudOpenSubscribe: () => ipcRenderer.invoke('cloud-open-subscribe'),
   cloudOpenManage: () => ipcRenderer.invoke('cloud-open-manage'),
   cloudGetSettings: () => ipcRenderer.invoke('cloud-get-settings'),

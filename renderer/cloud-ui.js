@@ -246,6 +246,31 @@
     });
   }
 
+  const bmacEmailInput = document.getElementById('cloud-bmac-email');
+  const saveBmacEmailBtn = document.getElementById('cloud-save-bmac-email');
+  if (saveBmacEmailBtn) {
+    saveBmacEmailBtn.addEventListener('click', async () => {
+      const bmacEmail = bmacEmailInput ? bmacEmailInput.value.trim() : '';
+      if (!bmacEmail) return alert('Enter your BuyMeACoffee email');
+      saveBmacEmailBtn.disabled = true;
+      saveBmacEmailBtn.textContent = 'Verifying...';
+      try {
+        const result = await window.api.cloudSaveBmacEmail(bmacEmail);
+        if (result.error) {
+          alert(result.error);
+        } else if (result.status === 'active') {
+          alert('Membership verified! Cloud sync is now active.');
+          await refreshStatus();
+        } else {
+          alert(result.message || 'No active membership found for that email on BuyMeACoffee.');
+        }
+      } finally {
+        saveBmacEmailBtn.disabled = false;
+        saveBmacEmailBtn.textContent = 'Save & Verify';
+      }
+    });
+  }
+
   if (loginSignoutLink) {
     loginSignoutLink.addEventListener('click', async (e) => {
       e.preventDefault();
@@ -459,6 +484,9 @@
       }
       if (syncIntervalSelect && settings.cloudSyncInterval) {
         syncIntervalSelect.value = String(settings.cloudSyncInterval);
+      }
+      if (bmacEmailInput && settings.cloudBmacEmail) {
+        bmacEmailInput.value = settings.cloudBmacEmail;
       }
     } catch {}
   }
