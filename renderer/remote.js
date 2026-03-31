@@ -2404,8 +2404,16 @@
   }
 
   audioConnectBtn.addEventListener('click', async () => {
-    await startAudio();
-    if (micReady && !audioEnabled) await startAudio();
+    if (!micReady) {
+      audioConnectBtn.textContent = 'Connecting...';
+      await startAudio();
+      if (micReady && !audioEnabled) {
+        audioConnectBtn.textContent = '✓ Mic ready — Tap once more to go live';
+      }
+    }
+    if (micReady && !audioEnabled) {
+      await startAudio();
+    }
   });
 
   audioBtn.addEventListener('click', async () => {
